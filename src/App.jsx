@@ -244,7 +244,7 @@ function HeatMap({ grid }) {
   // Pre-allocate a color buffer for the instanced mesh
   const colorArray = useMemo(() => {
     const arr = new Float32Array(grid.length * 3);
-    for (let i = 0; i < grid.length * 3; i++) arr[i] = 1; // Default white
+    for (let i = 0; i < grid.length * 3; i++) arr[i] = 1;
     return arr;
   }, [grid.length]);
   
@@ -252,19 +252,26 @@ function HeatMap({ grid }) {
     if (!meshRef.current) return;
     const dummy = new THREE.Object3D();
     const tempColor = new THREE.Color();
+
+    // Dynamic range: use actual min/max from grid for maximum sensitivity
+    let minT = Infinity, maxT = -Infinity;
+    for (const c of grid) {
+      if (c.currentTemp < minT) minT = c.currentTemp;
+      if (c.currentTemp > maxT) maxT = c.currentTemp;
+    }
+    // Ensure at least 1°C spread so we don't divide by zero
+    const spread = Math.max(maxT - minT, 1);
     
     grid.forEach((c, i) => {
-      // Place slightly above the road to not z-fight, cover the cell
-      dummy.position.set(c.cx, 0.1, c.cz);
+      dummy.position.set(c.cx, 0.15, c.cz);
       dummy.scale.set(CELL, 1, CELL);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
       
-      // Map temp from 20 to 45
-      const minT = 20, maxT = 45;
-      const t = Math.max(0, Math.min(1, (c.currentTemp - minT) / (maxT - minT)));
-      // Blue (cold) to Red (hot)
-      tempColor.setHSL((1 - t) * 0.65, 1, 0.5);
+      // Normalize 0-1 across the actual temperature spread
+      const t = Math.max(0, Math.min(1, (c.currentTemp - minT) / spread));
+      // Blue (cold) → Green → Yellow → Red (hot), full saturation
+      tempColor.setHSL((1 - t) * 0.65, 1, 0.45 + t * 0.1);
       meshRef.current.setColorAt(i, tempColor);
     });
     meshRef.current.instanceMatrix.needsUpdate = true;
@@ -275,8 +282,8 @@ function HeatMap({ grid }) {
 
   return (
     <instancedMesh ref={meshRef} args={[null, null, grid.length]}>
-      <boxGeometry args={[1, 0.1, 1]} />
-      <meshBasicMaterial transparent opacity={0.3} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      <boxGeometry args={[1, 0.15, 1]} />
+      <meshBasicMaterial transparent opacity={0.55} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       <instancedBufferAttribute attach="instanceColor" args={[colorArray, 3]} />
     </instancedMesh>
   );
@@ -312,7 +319,7 @@ function LoadingFallback() {
 
 // SceneFog replaced by <fogExp2 /> in CityScene
 
-function CityScene({ grid, onGridClick }) {
+function CityScene({ grid, onGridClick, showHeatMap }) {
   return (
     <>
       <fogExp2 attach="fog" args={["#c8ddf0", 0.004]} />
@@ -329,7 +336,7 @@ function CityScene({ grid, onGridClick }) {
         <meshBasicMaterial visible={false} />
       </mesh>
 
-      <HeatMap grid={grid} />
+      {showHeatMap && <HeatMap grid={grid} />}
 
       <Suspense fallback={<LoadingFallback />}>
         <group>
@@ -363,10 +370,11 @@ function CityScene({ grid, onGridClick }) {
 
 function CityView({ onBack }) {
   const [grid, setGrid] = useState(generateInitialGrid);
-  const [budget, setBudget] = useState(250000); // $250k starting budget
+  const [budget, setBudget] = useState(2000000); // $2M starting budget
   const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
   const [sensorLog, setSensorLog] = useState([]);
+  const [showHeatMap, setShowHeatMap] = useState(false);
 
   // Heat Simulation Loop (runs every 1 second)
   useInterval(() => {
@@ -415,12 +423,16 @@ function CityView({ onBack }) {
 
       if (mode === "BUDGET") {
         const matData = MATERIALS[selectedMaterial];
-        if (cell.material !== selectedMaterial && budget >= matData.cost) {
-          setBudget(prev => prev - matData.cost);
-          const newGrid = [...grid];
-          newGrid[cellIndex] = { ...cell, material: selectedMaterial };
-          setGrid(newGrid);
-        }
+        // Skip if same material already on this tile, or can't afford it
+        if (cell.material === selectedMaterial || budget < matData.cost) return;
+        setBudget(prev => prev - matData.cost);
+        const newGrid = [...grid];
+        newGrid[cellIndex] = {
+          ...cell,
+          material: selectedMaterial,
+          currentTemp: cell.baseTemp, // reset heat before applying new material
+        };
+        setGrid(newGrid);
       } else if (mode === "HEAT_HUNT") {
         setSensorLog(prev => [
           { time: new Date().toLocaleTimeString(), loc: `${hitCol},${hitRow}`, temp: cell.currentTemp.toFixed(1) },
@@ -506,7 +518,7 @@ function CityView({ onBack }) {
       {/* ─── CENTER 3D CANVAS ─── */}
       <div className="center-canvas">
         <Canvas shadows camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
-          <CityScene grid={grid} onGridClick={handleGridClick} />
+          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} />
         </Canvas>
       </div>
 
@@ -557,6 +569,13 @@ function CityView({ onBack }) {
             <span>45°C</span>
           </div>
         </div>
+
+        <button
+          className={`heatmap-toggle-btn ${showHeatMap ? "active" : ""}`}
+          onClick={() => setShowHeatMap(!showHeatMap)}
+        >
+          🌡️ {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
+        </button>
         <button className="hud-btn" onClick={() => setShowBoard(true)}>🏆 BOARD</button>
         {user && (
           <div className="hud-user">

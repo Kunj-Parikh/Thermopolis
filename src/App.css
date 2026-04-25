@@ -343,3 +343,34 @@ button {
 @keyframes app-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HEAT MAP TOGGLE
+   ═══════════════════════════════════════════════════════════════════ */
+
+.heatmap-toggle-btn {
+  width: 100%;
+  padding: 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  border: 1px solid rgba(255, 170, 32, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 170, 32, 0.08);
+  color: #ffaa20;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.heatmap-toggle-btn:hover {
+  background: rgba(255, 170, 32, 0.15);
+  box-shadow: 0 0 20px rgba(255, 170, 32, 0.15);
+}
+
+.heatmap-toggle-btn.active {
+  background: rgba(255, 64, 96, 0.15);
+  border-color: rgba(255, 64, 96, 0.5);
+  color: #ff4060;
+  box-shadow: 0 0 20px rgba(255, 64, 96, 0.2), inset 0 0 20px rgba(255, 64, 96, 0.05);
+}
