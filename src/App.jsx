@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stars } from "@react-three/drei";
+import { OrbitControls, Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
@@ -143,19 +143,22 @@ function buildTiers(totalH, rng) {
   return tiers;
 }
 
-// Zone → color palette
+// Zone → color palette (tuned for bright daylight)
 const PALETTES = {
-  midtown:     ["#b8ccd8","#8aaabf","#c8d8e8","#9ab8cc","#d8e8f0","#7090a8"],
-  financial:   ["#bcc8d0","#9aacb8","#ccd8e0","#aac0cc","#d0dce4","#80969e"],
-  residential: ["#8a8070","#7a8870","#8a7a6a","#6a7880","#9a8a7a","#7a6a60"],
-  mixed:       ["#8890a0","#9a9080","#7a8890","#8a9070","#909880","#8078a0"],
-  park:        ["#1e5e28"],
+  midtown:     ["#d0dfe8","#b8cdd8","#e8f0f8","#c8dce8","#f0f4f8","#a8c0d0","#c0d8e8"],
+  financial:   ["#ccd4d8","#b4c4cc","#dce4e8","#c4d4dc","#e4ecf0","#9ab0b8"],
+  residential: ["#c8a87a","#b89870","#d4b888","#bc9c6c","#e0c494","#b09060","#c4ac80"],
+  mixed:       ["#b0b8c8","#c0b0a0","#a8b8c0","#c0c8b0","#b8c0a8","#a898c0"],
+  park:        ["#2a7a30"],
 };
 
 function randomColor(zone, rng) {
   const pal = PALETTES[zone] || PALETTES.mixed;
   return pal[Math.floor(rng() * pal.length)];
 }
+
+// Daytime: no emissive glow needed
+function windowEmissive() { return "#000000"; }
 
 function generateNYC() {
   const blocks = [];
@@ -168,13 +171,11 @@ function generateNYC() {
       const cx = (col - COLS / 2 + 0.5) * CELL;
       const cz = (row - ROWS / 2 + 0.5) * CELL;
       const color = randomColor(zone, rng);
-      const windowEmissive = zone !== "park" && height > 0
-        ? (rng() > 0.5 ? "#ffd060" : "#80c4ff")
-        : "#000000";
+      const winEmissive = "#000000";  // no window glow in daylight
       const hasAntenna = zone !== "park" && height > 35 && rng() > 0.5;
       const hasWaterTower = height > 14 && rng() > 0.65;
 
-      blocks.push({ col, row, zone, height, tiers, cx, cz, color, windowEmissive, hasAntenna, hasWaterTower });
+      blocks.push({ col, row, zone, height, tiers, cx, cz, color, windowEmissive: winEmissive, hasAntenna, hasWaterTower });
     }
   }
   return blocks;
@@ -203,11 +204,9 @@ function NYCBuilding({ block }) {
       <mesh key={ti} position={[0, midY, 0]} castShadow receiveShadow>
         <boxGeometry args={[tw, tier.h, td]} />
         <meshStandardMaterial
-          color={hovered ? "#00ffc8" : color}
-          roughness={0.25}
-          metalness={0.55}
-          emissive={windowEmissive}
-          emissiveIntensity={hovered ? 0 : 0.10}
+          color={hovered ? "#ffdd55" : color}
+          roughness={0.18}
+          metalness={0.45}
         />
       </mesh>
     );
@@ -226,11 +225,11 @@ function NYCBuilding({ block }) {
         <>
           <mesh position={[0, height + 3.5, 0]} castShadow>
             <cylinderGeometry args={[0.05, 0.12, 7, 6]} />
-            <meshStandardMaterial color="#999" roughness={0.3} metalness={0.9} />
+            <meshStandardMaterial color="#aaaaaa" roughness={0.25} metalness={0.85} />
           </mesh>
           <mesh position={[0, height + 7.5, 0]}>
             <sphereGeometry args={[0.15, 8, 8]} />
-            <meshBasicMaterial color="#ff2020" />
+            <meshBasicMaterial color="#ff3030" />
           </mesh>
         </>
       )}
@@ -282,7 +281,7 @@ function ParkArea() {
       {/* Grass */}
       <mesh position={[cx, 0.05, cz]} receiveShadow>
         <boxGeometry args={[totalW, 0.1, totalD]} />
-        <meshStandardMaterial color="#1d5c25" roughness={0.97} />
+        <meshStandardMaterial color="#3a9e40" roughness={0.95} />
       </mesh>
 
       {/* Diagonal paths */}
@@ -302,7 +301,7 @@ function ParkArea() {
         scale={[totalW * 0.22, totalD * 0.14, 1]}
       >
         <circleGeometry args={[1, 24]} />
-        <meshStandardMaterial color="#1a4a6a" roughness={0.05} metalness={0.1} transparent opacity={0.88} />
+        <meshStandardMaterial color="#2a7aaa" roughness={0.02} metalness={0.15} transparent opacity={0.9} />
       </mesh>
 
       {/* Trees */}
@@ -310,13 +309,13 @@ function ParkArea() {
         <group key={i} position={[t.x, 0, t.z]}>
           <mesh position={[0, t.h / 2, 0]} castShadow>
             <cylinderGeometry args={[0.10, 0.18, t.h, 5]} />
-            <meshStandardMaterial color="#4a2e10" roughness={0.95} />
+            <meshStandardMaterial color="#6b3f18" roughness={0.95} />
           </mesh>
           <mesh position={[0, t.h + t.r * 0.55, 0]} castShadow>
             <sphereGeometry args={[t.r, 7, 6]} />
             <meshStandardMaterial
-              color={`hsl(${112 + t.shade * 3}, ${48 + t.shade}%, ${18 + t.shade * 2}%)`}
-              roughness={0.97}
+              color={`hsl(${115 + t.shade * 4}, ${55 + t.shade}%, ${28 + t.shade * 2}%)`}
+              roughness={0.95}
             />
           </mesh>
         </group>
@@ -340,21 +339,21 @@ function Roads() {
         <React.Fragment key={`av${i}`}>
           <mesh position={[x, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[ROAD_WIDTH, totalD]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.95} />
+            <meshStandardMaterial color="#2e2e2e" roughness={0.92} />
           </mesh>
           {/* Center line */}
           <mesh position={[x, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[0.07, totalD]} />
-            <meshBasicMaterial color="#e8c010" />
+            <meshBasicMaterial color="#f5d020" />
           </mesh>
           {/* Sidewalks */}
           <mesh position={[x - ROAD_WIDTH / 2 - 0.5, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[1.0, totalD]} />
-            <meshStandardMaterial color="#6a6258" roughness={0.98} />
+            <meshStandardMaterial color="#b0a890" roughness={0.97} />
           </mesh>
           <mesh position={[x + ROAD_WIDTH / 2 + 0.5, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[1.0, totalD]} />
-            <meshStandardMaterial color="#6a6258" roughness={0.98} />
+            <meshStandardMaterial color="#b0a890" roughness={0.97} />
           </mesh>
         </React.Fragment>
       ))}
@@ -364,12 +363,12 @@ function Roads() {
         <React.Fragment key={`st${i}`}>
           <mesh position={[0, 0.015, z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[totalW, ROAD_WIDTH]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.95} />
+            <meshStandardMaterial color="#2e2e2e" roughness={0.92} />
           </mesh>
           {/* Center line */}
           <mesh position={[0, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[totalW, 0.07]} />
-            <meshBasicMaterial color="#e8c010" />
+            <meshBasicMaterial color="#f5d020" />
           </mesh>
         </React.Fragment>
       ))}
@@ -438,16 +437,16 @@ function Ground() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[totalW, totalD]} />
-      <meshStandardMaterial color="#0f0f0f" roughness={0.98} />
+      <meshStandardMaterial color="#888070" roughness={0.97} />
     </mesh>
   );
 }
 
-// Atmosphere fog
+// Daytime atmosphere haze
 function SceneFog() {
   const { scene } = useThree();
   useEffect(() => {
-    scene.fog = new THREE.FogExp2("#060c18", 0.007);
+    scene.fog = new THREE.FogExp2("#c8ddf0", 0.005);
     return () => { scene.fog = null; };
   }, [scene]);
   return null;
@@ -461,29 +460,39 @@ function CityScene({ blocks }) {
   return (
     <>
       <SceneFog />
-      <color attach="background" args={["#060c18"]} />
-      <Stars radius={300} depth={60} count={3000} factor={4} fade />
+      <color attach="background" args={["#87ceeb"]} />
 
-      {/* Lighting */}
-      <ambientLight intensity={0.18} color="#b0c8ff" />
-      {/* Moon-style directional */}
-      <directionalLight
-        position={[80, 120, 60]}
-        intensity={0.7}
-        color="#ddeeff"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-far={400}
-        shadow-camera-left={-100}
-        shadow-camera-right={100}
-        shadow-camera-top={100}
-        shadow-camera-bottom={-100}
+      {/* Procedural sky dome */}
+      <Sky
+        distance={4500}
+        sunPosition={[100, 40, -80]}
+        inclination={0.52}
+        azimuth={0.22}
+        turbidity={6}
+        rayleigh={0.8}
+        mieCoefficient={0.004}
+        mieDirectionalG={0.85}
       />
-      {/* Warm city-glow fill */}
-      <pointLight position={[0, 2, 0]} intensity={1.5} color="#ff8020" distance={180} decay={1.2} />
-      {/* Cool blue rim from the river side */}
-      <directionalLight position={[-80, 20, -60]} intensity={0.15} color="#4488ff" />
+
+      {/* Lighting — bright sunny day */}
+      <ambientLight intensity={0.75} color="#fff4e0" />
+      {/* Sun */}
+      <directionalLight
+        position={[100, 140, -80]}
+        intensity={3.2}
+        color="#fff8e8"
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-far={500}
+        shadow-camera-left={-130}
+        shadow-camera-right={130}
+        shadow-camera-top={130}
+        shadow-camera-bottom={-130}
+        shadow-bias={-0.0005}
+      />
+      {/* Sky bounce — soft blue fill from above */}
+      <hemisphereLight skyColor="#b0d8ff" groundColor="#e8c890" intensity={0.6} />
 
       {/* Scene geometry */}
       <Ground />
