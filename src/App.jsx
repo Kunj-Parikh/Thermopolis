@@ -28,6 +28,10 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   TITLE SCREEN
+   ══════════════════════════════════════════════════════════════════════ */
+
 function TitleParticles() {
   const count = 150;
   const meshRef = useRef();
@@ -103,26 +107,6 @@ function TitleScreen({ onEnter }) {
     </div>
   );
 }
-
-/* ══════════════════════════════════════════════════════════════════════
-   MATERIALS DATA
-   ══════════════════════════════════════════════════════════════════════ */
-const MATERIALS = {
-  asphalt: { name: "Asphalt", cost: 0, albedo: 0.05, etCooling: 0, thermalMass: "Very High", diffusionRadius: 0, color: "#2C2C2C", notes: "Starting material, worst heat" },
-  concrete: { name: "Concrete pavement", cost: 50, albedo: 0.30, etCooling: 0, thermalMass: "High", diffusionRadius: 0, color: "#A0A0A0", notes: "Cheap upgrade, minor help" },
-  gravel: { name: "Gravel / light pavement", cost: 80, albedo: 0.45, etCooling: 0, thermalMass: "Medium", diffusionRadius: 0, color: "#C8B89A", notes: "Decent albedo, no cooling" },
-  grass: { name: "Grass / lawn", cost: 120, albedo: 0.25, etCooling: 35, thermalMass: "Low", diffusionRadius: 1, color: "#7EC850", notes: "Moderate cooling, wide availability" },
-  greenRoof: { name: "Green roof", cost: 200, albedo: 0.30, etCooling: 50, thermalMass: "Low", diffusionRadius: 1, color: "#5A8C3C", notes: "Good ET, applied to buildings only" },
-  coolRoof: { name: "White / cool roof", cost: 150, albedo: 0.70, etCooling: 0, thermalMass: "Low", diffusionRadius: 0, color: "#F0F0F0", notes: "High albedo but zero ET — only helps that cell" },
-  reflectivePavement: { name: "Reflective pavement", cost: 180, albedo: 0.60, etCooling: 0, thermalMass: "Medium", diffusionRadius: 0, color: "#E8E0C8", notes: "Good reflection, no cooling radius" },
-  shrubs: { name: "Shrubs / hedgerow", cost: 160, albedo: 0.22, etCooling: 45, thermalMass: "Low", diffusionRadius: 1, color: "#4A7A28", notes: "Mid-tier, good value" },
-  smallTree: { name: "Small tree", cost: 250, albedo: 0.20, etCooling: 60, thermalMass: "Low", diffusionRadius: 1, color: "#3A6B20", notes: "Solid cooling radius" },
-  matureTree: { name: "Mature tree", cost: 400, albedo: 0.18, etCooling: 85, thermalMass: "Low", diffusionRadius: 2, color: "#2D5218", notes: "Best ET, wide radius, expensive" },
-  waterFeature: { name: "Water feature / pond", cost: 350, albedo: 0.10, etCooling: 90, thermalMass: "Very High", diffusionRadius: 2, color: "#4A90D9", notes: "Excellent ET but only if 2×2 or larger" },
-  wetland: { name: "Wetland / rain garden", cost: 300, albedo: 0.12, etCooling: 95, thermalMass: "Medium", diffusionRadius: 2, color: "#6B9E6B", notes: "Highest cooling but placement-dependent" },
-  permeablePavement: { name: "Permeable pavement", cost: 200, albedo: 0.40, etCooling: 20, thermalMass: "Low", diffusionRadius: 0, color: "#B8A882", notes: "Absorbs water, mild ET in wet conditions" },
-  solarPanels: { name: "Solar panels", cost: 300, albedo: 0.10, etCooling: 0, thermalMass: "Low", diffusionRadius: 0, color: "#1A1A4A", notes: "Low albedo (hot!) but earns back $50/turn" }
-};
 
 /* ══════════════════════════════════════════════════════════════════════
    GAME CONSTANTS & SURFACE SCIENCE DATA
@@ -223,113 +207,64 @@ function generateInitialGrid() {
     for (let col = 0; col < GRID_COLS; col++) {
       const rng = seededRng(col * 1337 + row * 7919 + 42);
       const zone = getZone(col, row);
-      const height = buildingHeight(zone, rng);
-      const tiers = (zone !== "park" && height > 0) ? buildTiers(height, rng) : [];
-      const cx = (col - COLS / 2 + 0.5) * CELL;
-      const cz = (row - ROWS / 2 + 0.5) * CELL;
-      const color = randomColor(zone, rng);
-      const winEmissive = "#000000";  // no window glow in daylight
-      const hasAntenna = zone !== "park" && height > 35 && rng() > 0.5;
-      const hasWaterTower = height > 14 && rng() > 0.65;
+      const cx = (col - GRID_COLS / 2 + 0.5) * CELL;
+      const cz = (row - GRID_ROWS / 2 + 0.5) * CELL;
+      const rotY = Math.floor(rng() * 4) * (Math.PI / 2);
+      const scaleVar = 0.85 + rng() * 0.35;
+      
+      let initialMaterial = "Asphalt";
+      if (zone === "park") initialMaterial = "Grass";
 
-      blocks.push({ col, row, zone, height, tiers, cx, cz, color, windowEmissive: winEmissive, hasAntenna, hasWaterTower });
+      const isBuilding = zone !== "park";
+      const modelPath = isBuilding ? pickModel(zone, rng) : null;
+      
+      let heightBonus = 0;
+      if (modelPath?.includes("skyscraper")) heightBonus = 4;
+      else if (modelPath?.includes("building-")) heightBonus = 2;
+      else if (isBuilding) heightBonus = 1;
+
+      grid.push({
+        col, row, zone, cx, cz, rotY, scaleVar, modelPath, isBuilding,
+        material: initialMaterial,
+        baseTemp: BASE_TEMP,
+        heightBonus,
+        currentTemp: BASE_TEMP,
+        key: `${col}_${row}`
+      });
     }
   }
-  return blocks;
+  return grid;
+}
+
+// Hook for simulation loop
+function useInterval(callback, delay) {
+  const savedCallback = useRef();
+  useEffect(() => { savedCallback.current = callback; }, [callback]);
+  useEffect(() => {
+    if (delay !== null) {
+      const id = setInterval(() => savedCallback.current(), delay);
+      return () => clearInterval(id);
+    }
+  }, [delay]);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   3D SCENE COMPONENTS
+   3D COMPONENTS
    ══════════════════════════════════════════════════════════════════════ */
 
-function NYCBuilding({ block }) {
-  const { cx, cz, zone, height, tiers, color, windowEmissive, hasAntenna, hasWaterTower } = block;
-  const [hovered, setHovered] = useState(false);
-
-  if (zone === "park" || height === 0 || tiers.length === 0) return null;
-
-  const bw = BLOCK_SIZE * 0.86;
-  const bd = BLOCK_SIZE * 0.86;
-
-  let yOffset = 0;
-  const tierMeshes = tiers.map((tier, ti) => {
-    const tw = bw * tier.scale;
-    const td = bd * tier.scale;
-    const midY = yOffset + tier.h / 2;
-    yOffset += tier.h;
-    return (
-      <mesh key={ti} position={[0, midY, 0]} castShadow receiveShadow>
-        <boxGeometry args={[tw, tier.h, td]} />
-        <meshStandardMaterial
-          color={hovered ? "#ffdd55" : color}
-          roughness={0.18}
-          metalness={0.45}
-        />
-      </mesh>
-    );
-  });
-
-  return (
-    <group
-      position={[cx, 0, cz]}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-    >
-      {tierMeshes}
-
-      {/* Antenna spire */}
-      {hasAntenna && (
-        <>
-          <mesh position={[0, height + 3.5, 0]} castShadow>
-            <cylinderGeometry args={[0.05, 0.12, 7, 6]} />
-            <meshStandardMaterial color="#aaaaaa" roughness={0.25} metalness={0.85} />
-          </mesh>
-          <mesh position={[0, height + 7.5, 0]}>
-            <sphereGeometry args={[0.15, 8, 8]} />
-            <meshBasicMaterial color="#ff3030" />
-          </mesh>
-        </>
-      )}
-
-      {/* Water tower */}
-      {hasWaterTower && (
-        <group position={[bw * 0.25, height, bd * 0.25]}>
-          <mesh position={[0, 1.0, 0]}>
-            <cylinderGeometry args={[0.38, 0.48, 2.0, 8]} />
-            <meshStandardMaterial color="#5a3a18" roughness={0.92} />
-          </mesh>
-          <mesh position={[0, 2.2, 0]}>
-            <coneGeometry args={[0.5, 0.7, 8]} />
-            <meshStandardMaterial color="#4a2e12" roughness={0.92} />
-          </mesh>
-        </group>
-      )}
-    </group>
-  );
+function KenneyBuilding({ modelPath, position, rotation, scale }) {
+  const { scene } = useGLTF(modelPath);
+  const clonedScene = useMemo(() => scene.clone(true), [scene]);
+  return <primitive object={clonedScene} position={position} rotation={rotation} scale={scale} castShadow receiveShadow />;
 }
 
-// Central Park green area with trees
-function ParkArea() {
-  const startCol = 4, endCol = 7, startRow = 7, endRow = 13;
-  const parkCols = endCol - startCol + 1;
-  const parkRows = endRow - startRow + 1;
-  const totalW = parkCols * CELL;
-  const totalD = parkRows * CELL;
-  const cx = ((startCol + parkCols / 2 - 0.5) - COLS / 2) * CELL;
-  const cz = ((startRow + parkRows / 2 - 0.5) - ROWS / 2) * CELL;
-
-  const trees = useMemo(() => {
-    const arr = [];
-    const rng = seededRng(88888);
-    for (let i = 0; i < 180; i++) {
-      arr.push({
-        x: cx + (rng() - 0.5) * totalW * 0.9,
-        z: cz + (rng() - 0.5) * totalD * 0.9,
-        h: 1.5 + rng() * 3.5,
-        r: 0.8 + rng() * 1.4,
-        shade: Math.floor(rng() * 12),
-      });
-    }
+function HeatMap({ grid }) {
+  const meshRef = useRef();
+  
+  // Pre-allocate a color buffer for the instanced mesh
+  const colorArray = useMemo(() => {
+    const arr = new Float32Array(grid.length * 3);
+    for (let i = 0; i < grid.length * 3; i++) arr[i] = 1; // Default white
     return arr;
   }, [grid.length]);
   
@@ -405,11 +340,7 @@ function SceneFog() {
   return null;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   CITY VIEW
-   ══════════════════════════════════════════════════════════════════════ */
-
-function CityScene({ blocks }) {
+function CityScene({ grid, onGridClick }) {
   return (
     <>
       <SceneFog />
@@ -419,25 +350,126 @@ function CityScene({ blocks }) {
       <directionalLight position={[100, 140, -80]} intensity={3.2} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-camera-far={500} shadow-camera-left={-130} shadow-camera-right={130} shadow-camera-top={130} shadow-camera-bottom={-130} shadow-bias={-0.0005} />
       
       <Ground />
-      <Roads />
-      <ParkArea />
-      {blocks.map((b, i) => <NYCBuilding key={i} block={b} />)}
-      <StreetLights />
+      
+      {/* Interaction Plane */}
+      <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, 0.2, 0]} onPointerDown={onGridClick}>
+        <planeGeometry args={[GRID_COLS * CELL, GRID_ROWS * CELL]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
 
-      <OrbitControls
-        enableDamping
-        dampingFactor={0.07}
-        minDistance={8}
-        maxDistance={320}
-        maxPolarAngle={Math.PI / 2.05}
-        target={[0, 12, 0]}
-      />
+      <HeatMap grid={grid} />
+
+      <Suspense fallback={<LoadingFallback />}>
+        <group>
+          {grid.map(c => {
+            if (!c.isBuilding) {
+              const matColor = MATERIALS[c.material].color;
+              return (
+                <mesh key={c.key} position={[c.cx, 0.1, c.cz]} receiveShadow>
+                  <boxGeometry args={[CELL-0.5, 0.2, CELL-0.5]} />
+                  <meshStandardMaterial color={matColor} roughness={0.9} />
+                </mesh>
+              );
+            }
+            return (
+              <KenneyBuilding
+                key={c.key}
+                modelPath={c.modelPath}
+                position={[c.cx, 0, c.cz]}
+                rotation={[0, c.rotY, 0]}
+                scale={[MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar]}
+              />
+            );
+          })}
+        </group>
+      </Suspense>
+
+      <OrbitControls enableDamping dampingFactor={0.07} minDistance={8} maxDistance={320} maxPolarAngle={Math.PI / 2.05} target={[0, 5, 0]} listenToKeyEvents={window} keyPanSpeed={15} />
     </>
   );
 }
 
 function CityView({ onBack }) {
-  const blocks = useMemo(() => generateNYC(), []);
+  const [grid, setGrid] = useState(generateInitialGrid);
+  const [budget, setBudget] = useState(250000); // $250k starting budget
+  const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
+  const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
+  const [sensorLog, setSensorLog] = useState([]);
+
+  // Heat Simulation Loop (runs every 1 second)
+  useInterval(() => {
+    let currentGrid = grid.map(c => ({...c}));
+    
+    // 1. Calculate local target equilibrium for each cell
+    for (let i = 0; i < currentGrid.length; i++) {
+      const c = currentGrid[i];
+      const mat = MATERIALS[c.material];
+      const targetTemp = c.baseTemp + (1 - mat.albedo) * SOLAR_CONSTANT - mat.cooling + c.heightBonus;
+      // Move current slowly towards target
+      c.currentTemp += (targetTemp - c.currentTemp) * 0.15;
+    }
+
+    // 2. Perform 15 Diffusion Passes
+    for (let pass = 0; pass < 15; pass++) {
+      let nextGrid = currentGrid.map(c => ({...c}));
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const idx = r * GRID_COLS + c;
+          let tempSum = currentGrid[idx].currentTemp;
+          let count = 1;
+          
+          if (r > 0) { tempSum += currentGrid[(r-1)*GRID_COLS + c].currentTemp; count++; }
+          if (r < GRID_ROWS-1) { tempSum += currentGrid[(r+1)*GRID_COLS + c].currentTemp; count++; }
+          if (c > 0) { tempSum += currentGrid[r*GRID_COLS + c - 1].currentTemp; count++; }
+          if (c < GRID_COLS-1) { tempSum += currentGrid[r*GRID_COLS + c + 1].currentTemp; count++; }
+          
+          nextGrid[idx].currentTemp = tempSum / count;
+        }
+      }
+      currentGrid = nextGrid;
+    }
+    setGrid(currentGrid);
+  }, 1000);
+
+  // Interaction Handler
+  const handleGridClick = (e) => {
+    e.stopPropagation();
+    const hitCol = Math.floor(e.point.x / CELL) + Math.floor(GRID_COLS / 2);
+    const hitRow = Math.floor(e.point.z / CELL) + Math.floor(GRID_ROWS / 2);
+    
+    if (hitCol >= 0 && hitCol < GRID_COLS && hitRow >= 0 && hitRow < GRID_ROWS) {
+      const cellIndex = hitRow * GRID_COLS + hitCol;
+      const cell = grid[cellIndex];
+
+      if (mode === "BUDGET") {
+        const matData = MATERIALS[selectedMaterial];
+        if (cell.material !== selectedMaterial && budget >= matData.cost) {
+          setBudget(prev => prev - matData.cost);
+          const newGrid = [...grid];
+          newGrid[cellIndex] = { ...cell, material: selectedMaterial };
+          setGrid(newGrid);
+        }
+      } else if (mode === "HEAT_HUNT") {
+        setSensorLog(prev => [
+          { time: new Date().toLocaleTimeString(), loc: `${hitCol},${hitRow}`, temp: cell.currentTemp.toFixed(1) },
+          ...prev
+        ].slice(0, 10)); // keep last 10
+      }
+    }
+  };
+
+  // Stats computation
+  const avgTemp = grid.reduce((acc, c) => acc + c.currentTemp, 0) / grid.length;
+  const sortedByTemp = [...grid].sort((a, b) => b.currentTemp - a.currentTemp);
+  const hottest = sortedByTemp[0];
+  const coolest = sortedByTemp[sortedByTemp.length - 1];
+
+  const materialCounts = grid.reduce((acc, c) => {
+    acc[c.material] = (acc[c.material] || 0) + 1;
+    return acc;
+  }, {});
+  const { user, logOut: handleLogOut } = useAuth();
+  const [showBoard, setShowBoard] = useState(false);
 
   return (
     <div className="city-layout">
@@ -562,53 +594,11 @@ function CityView({ onBack }) {
         )}
       </div>
 
-      {/* Material Panel */}
-      <div className="material-panel">
-        <h3 className="panel-title">MATERIALS</h3>
-        <div className="material-list">
-          {Object.entries(MATERIALS).map(([key, mat]) => (
-            <div 
-              key={key} 
-              className={`material-item ${selectedMaterial === key ? 'selected' : ''}`}
-              onClick={() => setSelectedMaterial(key)}
-            >
-              <div className="material-color" style={{ background: mat.color }} />
-              <div className="material-info">
-                <div className="material-name">{mat.name} <span className="material-cost">${mat.cost}</span></div>
-                <div className="material-stats">Albedo: {mat.albedo} | ET: {mat.etCooling} W/m²</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Zone legend */}
-      <div className="city-legend">
-        <div className="legend-item"><span className="dot" style={{ background: "#b8ccd8" }} />Midtown</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#bcc8d0" }} />Financial District</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#1d5c25" }} />Central Park</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#8890a0" }} />Mixed Use</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#8a8070" }} />Residential</div>
-      </div>
-
       {/* Scoreboard overlay */}
       <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
-
-      <Canvas
-        shadows
-        camera={{ position: [100, 90, 100], fov: 42 }}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-        gl={{ antialias: true }}
-      >
-        <CityScene blocks={blocks} onBuildingClick={handleBuildingClick} />
-      </Canvas>
     </div>
   );
 }
-
-/* ══════════════════════════════════════════════════════════════════════
-   APP ROOT
-   ══════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
   const { user, loading } = useAuth();
