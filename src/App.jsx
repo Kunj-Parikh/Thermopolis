@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { OrbitControls, Sky } from "@react-three/drei";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
+import SatelliteSetup from "./components/SatelliteSetup";
 import "./App.css";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -70,14 +73,17 @@ function TitleScene() {
   );
 }
 
-function TitleScreen({ onEnter }) {
+function TitleScreen({ onEnter, onSatellite }) {
   return (
     <div className="title-screen">
       <TitleScene />
       <div className="title-overlay">
         <h1 className="title-logo">THERMOPOLIS</h1>
         <p className="title-tagline">Every surface choice has a measurable temperature consequence.</p>
-        <button className="enter-btn" onClick={onEnter}>ENTER CITY</button>
+        <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginBottom: "20px" }}>
+          <button className="enter-btn" onClick={onEnter}>ENTER CITY</button>
+          <button className="enter-btn" onClick={onSatellite} style={{ background: "linear-gradient(90deg, #00ffc8, #0088ff)" }}>SATELLITE PIPELINE</button>
+        </div>
         <div className="title-badges">
           <span>React</span>
           <span>Three.js r{THREE.REVISION}</span>
@@ -93,7 +99,7 @@ function TitleScreen({ onEnter }) {
    ══════════════════════════════════════════════════════════════════════ */
 
 const MATERIALS = {
-  Asphalt: { albedo: 0.05, cooling: 0, cost: 1000, color: "#222222" },
+  Road: { albedo: 0.05, cooling: 0, cost: 1000, color: "#222222" },
   Concrete: { albedo: 0.30, cooling: 2, cost: 5000, color: "#888888" },
   "White Roof": { albedo: 0.70, cooling: 5, cost: 20000, color: "#ffffff" },
   Grass: { albedo: 0.25, cooling: 8, cost: 15000, color: "#3a9e40" },
@@ -131,7 +137,19 @@ const WIDE_BUILDING_MODELS = [
 ];
 
 const ALL_MODELS = [...SKYSCRAPER_MODELS, ...LARGE_BUILDING_MODELS, ...LOW_DETAIL_MODELS, ...WIDE_BUILDING_MODELS];
-ALL_MODELS.forEach((path) => useGLTF.preload(path));
+
+const roadCanvas = document.createElement("canvas");
+roadCanvas.width = 256;
+roadCanvas.height = 256;
+const roadCtx = roadCanvas.getContext("2d");
+roadCtx.fillStyle = "#222222";
+roadCtx.fillRect(0, 0, 256, 256);
+roadCtx.fillStyle = "#eeeeee";
+roadCtx.fillRect(124, 0, 8, 64);
+roadCtx.fillRect(124, 128, 8, 64);
+const ROAD_TEXTURE = new THREE.CanvasTexture(roadCanvas);
+ROAD_TEXTURE.wrapS = THREE.RepeatWrapping;
+ROAD_TEXTURE.wrapT = THREE.RepeatWrapping;
 
 /* ══════════════════════════════════════════════════════════════════════
    CITY LAYOUT GENERATOR
@@ -141,8 +159,8 @@ const MODEL_SCALE = 6;
 const BLOCK_SIZE = 7;
 const ROAD_WIDTH = 3;
 const CELL = BLOCK_SIZE + ROAD_WIDTH; // 10
-const GRID_COLS = 12;
-const GRID_ROWS = 16;
+const DEFAULT_GRID_COLS = 12;
+const DEFAULT_GRID_ROWS = 16;
 
 function seededRng(seed) {
   let s = seed;
@@ -157,54 +175,84 @@ function getZone(col, row) {
   return "mixed";
 }
 
-function pickModel(zone, rng) {
+function pickBuildingParams(zone, rng) {
   const r = rng();
-  switch (zone) {
-    case "downtown":
-      if (r < 0.50) return SKYSCRAPER_MODELS[Math.floor(rng() * SKYSCRAPER_MODELS.length)];
-      if (r < 0.85) return LARGE_BUILDING_MODELS[Math.floor(rng() * LARGE_BUILDING_MODELS.length)];
-      return LOW_DETAIL_MODELS[Math.floor(rng() * LOW_DETAIL_MODELS.length)];
-    case "financial":
-      if (r < 0.40) return SKYSCRAPER_MODELS[Math.floor(rng() * SKYSCRAPER_MODELS.length)];
-      if (r < 0.80) return LARGE_BUILDING_MODELS[Math.floor(rng() * LARGE_BUILDING_MODELS.length)];
-      return LOW_DETAIL_MODELS[Math.floor(rng() * LOW_DETAIL_MODELS.length)];
-    case "residential":
-      if (r < 0.15) return LARGE_BUILDING_MODELS[Math.floor(rng() * LARGE_BUILDING_MODELS.length)];
-      if (r < 0.25) return WIDE_BUILDING_MODELS[Math.floor(rng() * WIDE_BUILDING_MODELS.length)];
-      return LOW_DETAIL_MODELS[Math.floor(rng() * LOW_DETAIL_MODELS.length)];
-    case "mixed":
-    default:
-      if (r < 0.15) return SKYSCRAPER_MODELS[Math.floor(rng() * SKYSCRAPER_MODELS.length)];
-      if (r < 0.50) return LARGE_BUILDING_MODELS[Math.floor(rng() * LARGE_BUILDING_MODELS.length)];
-      if (r < 0.85) return LOW_DETAIL_MODELS[Math.floor(rng() * LOW_DETAIL_MODELS.length)];
-      return WIDE_BUILDING_MODELS[Math.floor(rng() * WIDE_BUILDING_MODELS.length)];
+  let buildingType = "Small Building";
+  let heightBonus = 1;
+  let bWidth = CELL * 0.8;
+  let bDepth = CELL * 0.8;
+  let bHeight = 1;
+
+  if (zone === "downtown" || zone === "financial") {
+    if (r < 0.40) {
+      buildingType = "Skyscraper";
+      heightBonus = 4;
+      bHeight = 8 + rng() * 12;
+      bWidth = CELL * (0.6 + rng() * 0.3);
+      bDepth = CELL * (0.6 + rng() * 0.3);
+    } else if (r < 0.80) {
+      buildingType = "Large Building";
+      heightBonus = 2;
+      bHeight = 3 + rng() * 4;
+      bWidth = CELL * (0.7 + rng() * 0.2);
+      bDepth = CELL * (0.7 + rng() * 0.2);
+    } else {
+      buildingType = "Small Building";
+      heightBonus = 1;
+      bHeight = 1 + rng() * 1.5;
+      bWidth = CELL * (0.4 + rng() * 0.4);
+      bDepth = CELL * (0.4 + rng() * 0.4);
+    }
+  } else {
+    if (r < 0.15) {
+      buildingType = "Large Building";
+      heightBonus = 2;
+      bHeight = 3 + rng() * 4;
+      bWidth = CELL * (0.7 + rng() * 0.2);
+      bDepth = CELL * (0.7 + rng() * 0.2);
+    } else {
+      buildingType = "Small Building";
+      heightBonus = 1;
+      bHeight = 1 + rng() * 1.5;
+      bWidth = CELL * (0.4 + rng() * 0.4);
+      bDepth = CELL * (0.4 + rng() * 0.4);
+    }
   }
+
+  return { buildingType, heightBonus, bWidth, bDepth, bHeight };
 }
 
 function generateInitialGrid() {
-  const grid = [];
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
+  const tempGrid = [];
+  for (let row = 0; row < DEFAULT_GRID_ROWS; row++) {
+    const rowArr = [];
+    for (let col = 0; col < DEFAULT_GRID_COLS; col++) {
       const rng = seededRng(col * 1337 + row * 7919 + 42);
       const zone = getZone(col, row);
-      const cx = (col - GRID_COLS / 2 + 0.5) * CELL;
-      const cz = (row - GRID_ROWS / 2 + 0.5) * CELL;
-      const rotY = Math.floor(rng() * 4) * (Math.PI / 2);
-      const scaleVar = 0.85 + rng() * 0.35;
+      const cx = (col - DEFAULT_GRID_COLS / 2 + 0.5) * CELL;
+      const cz = (row - DEFAULT_GRID_ROWS / 2 + 0.5) * CELL;
       
-      let initialMaterial = "Asphalt";
+      let initialMaterial = "Road";
       if (zone === "park") initialMaterial = "Grass";
 
       const isBuilding = zone !== "park";
-      const modelPath = isBuilding ? pickModel(zone, rng) : null;
       
+      let buildingType = null;
       let heightBonus = 0;
-      if (modelPath?.includes("skyscraper")) heightBonus = 4;
-      else if (modelPath?.includes("building-")) heightBonus = 2;
-      else if (isBuilding) heightBonus = 1;
+      let bWidth = 0, bDepth = 0, bHeight = 0;
+      
+      if (isBuilding) {
+        const params = pickBuildingParams(zone, rng);
+        buildingType = params.buildingType;
+        heightBonus = params.heightBonus;
+        bWidth = params.bWidth;
+        bDepth = params.bDepth;
+        bHeight = params.bHeight;
+      }
 
-      grid.push({
-        col, row, zone, cx, cz, rotY, scaleVar, modelPath, isBuilding,
+      rowArr.push({
+        col, row, zone, cx, cz, rotY: Math.floor(rng() * 4) * (Math.PI / 2), scaleVar: 1.0, isBuilding,
+        buildingType, bWidth, bDepth, bHeight,
         material: initialMaterial,
         baseTemp: BASE_TEMP,
         heightBonus,
@@ -212,8 +260,94 @@ function generateInitialGrid() {
         key: `${col}_${row}`
       });
     }
+    tempGrid.push(rowArr);
   }
-  return grid;
+
+  // Greedy merge pass
+  let proceduralTileCount = 0;
+  let kenneyTileCount = 0;
+
+  for (let row = 0; row < DEFAULT_GRID_ROWS; row++) {
+     for (let col = 0; col < DEFAULT_GRID_COLS; col++) {
+         const cell = tempGrid[row][col];
+         if (cell.isBuilding && !cell.isSlave) {
+             const rng = seededRng(col * 1337 + row * 7919 + 42);
+             // Try to expand horizontally
+             const MAX_AREA = 25;
+             const MAX_DIM = 3;
+             let w = 1;
+             while (col + w < DEFAULT_GRID_COLS && w < MAX_DIM) {
+                 const nextCell = tempGrid[row][col + w];
+                 if (nextCell.isBuilding && !nextCell.isSlave && nextCell.buildingType === cell.buildingType) w++;
+                 else break;
+             }
+             // Try to expand vertically
+             let h = 1;
+             let canExpandH = true;
+             while (row + h < DEFAULT_GRID_ROWS && canExpandH && h < MAX_DIM && (w * (h + 1)) <= MAX_AREA) {
+                 for (let i = 0; i < w; i++) {
+                     const nextCell = tempGrid[row + h][col + i];
+                     if (!nextCell.isBuilding || nextCell.isSlave || nextCell.buildingType !== cell.buildingType) {
+                         canExpandH = false;
+                         break;
+                     }
+                 }
+                 if (canExpandH) h++;
+             }
+             
+             if (w > 1 || h > 1) {
+                 proceduralTileCount += (w * h);
+                 cell.mergedWidth = w;
+                 cell.mergedHeight = h;
+                 // Mark slaves
+                 for (let r = 0; r < h; r++) {
+                     for (let c = 0; c < w; c++) {
+                         if (r === 0 && c === 0) continue;
+                         tempGrid[row + r][col + c].isSlave = true;
+                         tempGrid[row + r][col + c].masterKey = cell.key;
+                     }
+                 }
+                 // Adjust Master's position and size
+                 cell.bWidth = (w * CELL) * (0.85 + rng() * 0.1);
+                 cell.bDepth = (h * CELL) * (0.85 + rng() * 0.1);
+                 cell.cx = cell.cx + ((w - 1) * CELL) / 2;
+                 cell.cz = cell.cz + ((h - 1) * CELL) / 2;
+                 
+                 // Drastically vary height for massive buildings based on their footprint area
+                 if (cell.buildingType === "Skyscraper") {
+                     cell.bHeight = 15 + rng() * 20 + (w * h * 2.5);
+                 } else if (cell.buildingType === "Large Building") {
+                     cell.bHeight = 5 + rng() * 10 + (w * h * 1.5);
+                 } else {
+                     cell.bHeight = 2 + rng() * 3 + (w * h * 0.8);
+                 }
+             } else {
+                 // 1x1 building: balance the 50/50 overall visual surface area!
+                 let useKenney = false;
+                 if (kenneyTileCount < proceduralTileCount) {
+                     useKenney = true;
+                 } else {
+                     useKenney = rng() > 0.8;
+                 }
+
+                 if (useKenney) {
+                     kenneyTileCount += 1;
+                     cell.useKenney = true;
+                     if (cell.buildingType === "Skyscraper") cell.modelPath = SKYSCRAPER_MODELS[Math.floor(rng() * SKYSCRAPER_MODELS.length)];
+                     else if (cell.buildingType === "Large Building") cell.modelPath = LARGE_BUILDING_MODELS[Math.floor(rng() * LARGE_BUILDING_MODELS.length)];
+                     else cell.modelPath = LOW_DETAIL_MODELS[Math.floor(rng() * LOW_DETAIL_MODELS.length)];
+                 } else {
+                     proceduralTileCount += 1;
+                     if (cell.buildingType === "Skyscraper") cell.bHeight = 10 + rng() * 15;
+                     else if (cell.buildingType === "Large Building") cell.bHeight = 4 + rng() * 6;
+                     else cell.bHeight = 1 + rng() * 3;
+                 }
+             }
+         }
+     }
+  }
+
+  return tempGrid.flat();
 }
 
 // Hook for simulation loop
@@ -233,8 +367,16 @@ function useInterval(callback, delay) {
    ══════════════════════════════════════════════════════════════════════ */
 
 function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial }) {
-  const { scene } = useGLTF(modelPath);
-  const clonedScene = useMemo(() => scene.clone(true), [scene]);
+  const objPath = modelPath.replace('.glb', '.obj').replace('/models/', '/models_obj/');
+  const mtlPath = modelPath.replace('.glb', '.mtl').replace('/models/', '/models_obj/');
+
+  const materials = useLoader(MTLLoader, mtlPath);
+  const obj = useLoader(OBJLoader, objPath, (loader) => {
+    materials.preload();
+    loader.setMaterials(materials);
+  });
+  
+  const clonedScene = useMemo(() => obj.clone(true), [obj]);
   
   const { box, size, center, roofY } = useMemo(() => {
     const b = new THREE.Box3().setFromObject(clonedScene);
@@ -267,7 +409,7 @@ function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial 
     return { box: b, size: s, center: c, roofY: finalRoofY };
   }, [clonedScene]);
 
-  const showOverlay = appliedMaterial && appliedMaterial !== "Asphalt";
+  const showOverlay = appliedMaterial && appliedMaterial !== "Road";
   const overlayColor = showOverlay ? MATERIALS[appliedMaterial].color : "#ffffff";
   const overlayThickness = 0.08;
 
@@ -275,8 +417,42 @@ function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial 
     <group position={position} rotation={rotation} scale={scale}>
       <primitive object={clonedScene} castShadow receiveShadow />
       {showOverlay && (
-        <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]} castShadow receiveShadow>
+        <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]} receiveShadow>
           <boxGeometry args={[size.x * 0.9, overlayThickness, size.z * 0.9]} />
+          <meshStandardMaterial color={overlayColor} roughness={0.8} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+function ProceduralBuilding({ width, height, depth, buildingType, position, appliedMaterial }) {
+  const showOverlay = appliedMaterial && appliedMaterial !== "Road";
+  const overlayColor = showOverlay ? MATERIALS[appliedMaterial].color : "#ffffff";
+  const overlayThickness = 0.08;
+  
+  // Shrink building to leave a visible border around it (like Kenney models)
+  const BORDER = 0.7; // 70% of cell = visible dark ground margin on all sides
+  const renderW = width * BORDER;
+  const renderD = depth * BORDER;
+  
+  // Random facade colors based on building type
+  const facadeColor = useMemo(() => {
+    const tones = buildingType === "Skyscraper" ? ["#4a6b8c", "#2d353b", "#8899a6"] :
+                 buildingType === "Large Building" ? ["#666666", "#8b7e66", "#d9d0c1", "#5c544d"] :
+                 ["#8f4b38", "#d9c4aa", "#5c6f68", "#94a8b3", "#ccbda8"];
+    return tones[Math.floor(Math.random() * tones.length)];
+  }, [buildingType]);
+
+  return (
+    <group position={position}>
+      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[renderW, height, renderD]} />
+        <meshStandardMaterial color={facadeColor} roughness={0.7} />
+      </mesh>
+      {showOverlay && (
+        <mesh position={[0, height + overlayThickness / 2 + 0.01, 0]} receiveShadow>
+          <boxGeometry args={[renderW * 0.9, overlayThickness, renderD * 0.9]} />
           <meshStandardMaterial color={overlayColor} roughness={0.8} />
         </mesh>
       )}
@@ -336,9 +512,9 @@ function HeatMap({ grid }) {
 }
 
 // Ground plane
-function Ground() {
-  const totalW = GRID_COLS * CELL + 60;
-  const totalD = GRID_ROWS * CELL + 60;
+function Ground({ cols, rows }) {
+  const totalW = cols * CELL + 60;
+  const totalD = rows * CELL + 60;
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
       <planeGeometry args={[totalW, totalD]} />
@@ -365,7 +541,7 @@ function LoadingFallback() {
 
 // SceneFog replaced by <fogExp2 /> in CityScene
 
-function CityScene({ grid, onGridClick, showHeatMap }) {
+function CityScene({ grid, onGridClick, showHeatMap, cols, rows }) {
   return (
     <>
       <fogExp2 attach="fog" args={["#c8ddf0", 0.004]} />
@@ -374,11 +550,11 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
       <ambientLight intensity={0.75} color="#fff4e0" />
       <directionalLight position={[100, 140, -80]} intensity={3.2} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-camera-far={500} shadow-camera-left={-130} shadow-camera-right={130} shadow-camera-top={130} shadow-camera-bottom={-130} shadow-bias={-0.0005} />
       
-      <Ground />
+      <Ground cols={cols} rows={rows} />
       
       {/* Interaction Plane */}
       <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, 0.2, 0]} onPointerDown={onGridClick}>
-        <planeGeometry args={[GRID_COLS * CELL, GRID_ROWS * CELL]} />
+        <planeGeometry args={[cols * CELL, rows * CELL]} />
         <meshBasicMaterial visible={false} />
       </mesh>
 
@@ -389,6 +565,14 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
           {grid.map(c => {
             if (!c.isBuilding) {
               const matColor = MATERIALS[c.material].color;
+              if (c.material === "Road") {
+                return (
+                  <mesh key={c.key} position={[c.cx, 0.1, c.cz]} receiveShadow>
+                    <boxGeometry args={[CELL, 0.2, CELL]} />
+                    <meshStandardMaterial color={matColor} roughness={0.9} />
+                  </mesh>
+                );
+              }
               return (
                 <mesh key={c.key} position={[c.cx, 0.1, c.cz]} receiveShadow>
                   <boxGeometry args={[CELL-0.5, 0.2, CELL-0.5]} />
@@ -396,13 +580,29 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
                 </mesh>
               );
             }
+            if (c.isSlave) return null;
+            
+            if (c.useKenney) {
+              return (
+                <KenneyBuilding
+                  key={c.key}
+                  modelPath={c.modelPath}
+                  position={[c.cx, 0, c.cz]}
+                  rotation={[0, c.rotY, 0]}
+                  scale={[MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar]}
+                  appliedMaterial={c.material}
+                />
+              );
+            }
+
             return (
-              <KenneyBuilding
+              <ProceduralBuilding
                 key={c.key}
-                modelPath={c.modelPath}
+                width={c.bWidth}
+                height={c.bHeight}
+                depth={c.bDepth}
+                buildingType={c.buildingType}
                 position={[c.cx, 0, c.cz]}
-                rotation={[0, c.rotY, 0]}
-                scale={[MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar]}
                 appliedMaterial={c.material}
               />
             );
@@ -415,8 +615,8 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
   );
 }
 
-function CityView({ onBack }) {
-  const [grid, setGrid] = useState(generateInitialGrid);
+function CityView({ onBack, initialGrid, gridCols = DEFAULT_GRID_COLS, gridRows = DEFAULT_GRID_ROWS }) {
+  const [grid, setGrid] = useState(initialGrid || generateInitialGrid);
   const [budget, setBudget] = useState(2000000); // $2M starting budget
   const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
@@ -439,16 +639,16 @@ function CityView({ onBack }) {
     // 2. Perform 15 Diffusion Passes
     for (let pass = 0; pass < 15; pass++) {
       let nextGrid = currentGrid.map(c => ({...c}));
-      for (let r = 0; r < GRID_ROWS; r++) {
-        for (let c = 0; c < GRID_COLS; c++) {
-          const idx = r * GRID_COLS + c;
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          const idx = r * gridCols + c;
           let tempSum = currentGrid[idx].currentTemp;
           let count = 1;
           
-          if (r > 0) { tempSum += currentGrid[(r-1)*GRID_COLS + c].currentTemp; count++; }
-          if (r < GRID_ROWS-1) { tempSum += currentGrid[(r+1)*GRID_COLS + c].currentTemp; count++; }
-          if (c > 0) { tempSum += currentGrid[r*GRID_COLS + c - 1].currentTemp; count++; }
-          if (c < GRID_COLS-1) { tempSum += currentGrid[r*GRID_COLS + c + 1].currentTemp; count++; }
+          if (r > 0) { tempSum += currentGrid[(r-1)*gridCols + c].currentTemp; count++; }
+          if (r < gridRows-1) { tempSum += currentGrid[(r+1)*gridCols + c].currentTemp; count++; }
+          if (c > 0) { tempSum += currentGrid[r*gridCols + c - 1].currentTemp; count++; }
+          if (c < gridCols-1) { tempSum += currentGrid[r*gridCols + c + 1].currentTemp; count++; }
           
           nextGrid[idx].currentTemp = tempSum / count;
         }
@@ -461,24 +661,39 @@ function CityView({ onBack }) {
   // Interaction Handler
   const handleGridClick = (e) => {
     e.stopPropagation();
-    const hitCol = Math.floor(e.point.x / CELL) + Math.floor(GRID_COLS / 2);
-    const hitRow = Math.floor(e.point.z / CELL) + Math.floor(GRID_ROWS / 2);
+    const hitCol = Math.floor(e.point.x / CELL) + Math.floor(gridCols / 2);
+    const hitRow = Math.floor(e.point.z / CELL) + Math.floor(gridRows / 2);
     
-    if (hitCol >= 0 && hitCol < GRID_COLS && hitRow >= 0 && hitRow < GRID_ROWS) {
-      const cellIndex = hitRow * GRID_COLS + hitCol;
+    if (hitCol >= 0 && hitCol < gridCols && hitRow >= 0 && hitRow < gridRows) {
+      const cellIndex = hitRow * gridCols + hitCol;
       const cell = grid[cellIndex];
 
       if (mode === "BUDGET") {
         const matData = MATERIALS[selectedMaterial];
+        
+        let targetCell = cell;
+        if (cell.isSlave) {
+          targetCell = grid.find(c => c.key === cell.masterKey);
+        }
+        
         // Skip if same material already on this tile, or can't afford it
-        if (cell.material === selectedMaterial || budget < matData.cost) return;
+        if (targetCell.material === selectedMaterial || budget < matData.cost) return;
+        
         setBudget(prev => prev - matData.cost);
         const newGrid = [...grid];
-        newGrid[cellIndex] = {
-          ...cell,
-          material: selectedMaterial,
-          currentTemp: cell.baseTemp, // reset heat before applying new material
-        };
+        
+        // Find all cells that share this master (including the master itself)
+        for (let i = 0; i < newGrid.length; i++) {
+           const c = newGrid[i];
+           if (c.key === targetCell.key || (c.isSlave && c.masterKey === targetCell.key)) {
+             newGrid[i] = {
+               ...c,
+               material: selectedMaterial,
+               currentTemp: c.baseTemp,
+             };
+           }
+        }
+        
         setGrid(newGrid);
       } else if (mode === "HEAT_HUNT") {
         setSensorLog(prev => [
@@ -565,7 +780,7 @@ function CityView({ onBack }) {
       {/* ─── CENTER 3D CANVAS ─── */}
       <div className="center-canvas">
         <Canvas shadows camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
-          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} />
+          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} cols={gridCols} rows={gridRows} />
         </Canvas>
       </div>
 
@@ -641,6 +856,7 @@ function CityView({ onBack }) {
 export default function App() {
   const { user, loading } = useAuth();
   const [screen, setScreen] = useState("title");
+  const [simConfig, setSimConfig] = useState(null);
 
   // Show loading spinner while Firebase checks auth
   if (loading) {
@@ -655,7 +871,29 @@ export default function App() {
   if (!user) return <LoginScreen />;
 
   // Signed in → normal flow
-  if (screen === "city") return <CityView onBack={() => setScreen("title")} />;
-  return <TitleScreen onEnter={() => setScreen("city")} />;
+  if (screen === "city") {
+    return (
+      <CityView 
+        onBack={() => setScreen("title")} 
+        initialGrid={simConfig?.grid} 
+        gridRows={simConfig?.rows} 
+        gridCols={simConfig?.cols} 
+      />
+    );
+  }
+  
+  if (screen === "satellite") {
+    return (
+      <SatelliteSetup 
+        onBack={() => setScreen("title")}
+        onSimulationStart={(grid, rows, cols) => {
+          setSimConfig({ grid, rows, cols });
+          setScreen("city");
+        }}
+      />
+    );
+  }
+
+  return <TitleScreen onEnter={() => { setSimConfig(null); setScreen("city"); }} onSatellite={() => setScreen("satellite")} />;
 }
 
