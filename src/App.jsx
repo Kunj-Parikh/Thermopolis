@@ -650,7 +650,7 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
 
 function CityView({ onBack, mapMode }) {
   const [grid, setGrid] = useState(() => generateInitialGrid(mapMode));
-  const [budget, setBudget] = useState(200000000000000); // $2M starting budget
+  const [budget, setBudget] = useState(10_000_000); // $2M starting budget
   const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
   const [activeTab, setActiveTab] = useState("MATERIALS"); // "MATERIALS" or "BUILDINGS"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
@@ -787,83 +787,40 @@ function CityView({ onBack, mapMode }) {
 
   return (
     <div className="city-layout">
-      {/* ─── LEFT PANEL ─── */}
-      <div className="panel left-panel">
+      {/* ─── CENTER 3D CANVAS (BACKGROUND) ─── */}
+      <div className="center-canvas">
+        <Canvas shadows camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
+          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} />
+        </Canvas>
+      </div>
+
+      {/* ─── TOP LEFT CONTROLS ─── */}
+      <div className="hud-panel hud-top-left">
         <button className="back-btn" onClick={onBack}>← TITLE SCREEN</button>
         <h2 className="panel-title">CONTROLS</h2>
         
         <div className="mode-toggle">
-          <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
+          <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget</button>
           <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
         </div>
 
         {mode === "BUDGET" && (
-          <div className="mode-content budget-mode">
-            <div className="budget-display">
-              <h4>REMAINING BUDGET</h4>
-              <div className="budget-val">${budget.toLocaleString()}</div>
-              <button 
-                className="spin-btn-small" 
-                onClick={() => setShowSpinner(true)}
-                style={{
-                  marginTop: '10px', width: '100%', padding: '8px', 
-                  background: 'linear-gradient(135deg, #ff4060, #ffaa20)',
-                  color: '#fff', border: 'none', borderRadius: '4px',
-                  fontFamily: 'Orbitron', fontWeight: 'bold', cursor: 'pointer',
-                  letterSpacing: '1px', boxShadow: '0 0 10px rgba(255, 64, 96, 0.4)'
-                }}
-              >
-                🎰 SPIN FOR FUNDS
-              </button>
-            </div>
-            
-            <div className="mode-toggle" style={{marginTop: '16px', marginBottom: '8px'}}>
-              <button className={activeTab === "MATERIALS" ? "active" : ""} onClick={() => setActiveTab("MATERIALS")}>Materials</button>
-              <button className={activeTab === "BUILDINGS" ? "active" : ""} onClick={() => setActiveTab("BUILDINGS")}>Buildings</button>
-            </div>
-
-            {activeTab === "MATERIALS" ? (
-              <div className="materials-list">
-                {Object.entries(MATERIALS).map(([name, data]) => (
-                  <div 
-                    key={name} 
-                    className={`material-card ${selectedMaterial === name ? "active" : ""}`}
-                    onClick={() => setSelectedMaterial(name)}
-                  >
-                    <div className="mat-header">
-                      <span className="mat-name">{name}</span>
-                      <span className="mat-cost">${data.cost / 1000}k</span>
-                    </div>
-                    <div className="mat-stats">
-                      <span>Albedo: {data.albedo}</span>
-                      <span>Cooling: {data.cooling}°</span>
-                      {data.income && <span style={{color: '#00ffc8'}}>Income: +${data.income}/s</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="materials-list">
-                {Object.entries(BUILDINGS).map(([name, data]) => (
-                  <div 
-                    key={name} 
-                    className={`material-card ${selectedBuilding === name ? "active" : ""}`}
-                    onClick={() => setSelectedBuilding(name)}
-                  >
-                    <div className="mat-header">
-                      <span className="mat-name">{name}</span>
-                      <span className="mat-cost">${data.cost / 1000}k</span>
-                    </div>
-                    {name !== "Bulldoze" && (
-                      <div className="mat-stats">
-                        <span>Height Bonus: +{data.heightBonus}°</span>
-                        <span>Type: {data.type}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="budget-display">
+            <h4>REMAINING BUDGET</h4>
+            <div className="budget-val">${budget.toLocaleString()}</div>
+            <button 
+              className="spin-btn-small" 
+              onClick={() => setShowSpinner(true)}
+              style={{
+                marginTop: '10px', width: '100%', padding: '8px', 
+                background: 'linear-gradient(135deg, #ff4060, #ffaa20)',
+                color: '#fff', border: 'none', borderRadius: '4px',
+                fontFamily: 'Orbitron', fontWeight: 'bold', cursor: 'pointer',
+                letterSpacing: '1px', boxShadow: '0 0 10px rgba(255, 64, 96, 0.4)'
+              }}
+            >
+              SPIN FOR FUNDS
+            </button>
           </div>
         )}
 
@@ -886,15 +843,8 @@ function CityView({ onBack, mapMode }) {
         )}
       </div>
 
-      {/* ─── CENTER 3D CANVAS ─── */}
-      <div className="center-canvas">
-        <Canvas shadows camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
-          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} />
-        </Canvas>
-      </div>
-
-      {/* ─── RIGHT PANEL ─── */}
-      <div className="panel right-panel">
+      {/* ─── TOP RIGHT STATS ─── */}
+      <div className="hud-panel hud-top-right">
         <h2 className="panel-title">LIVE STATS</h2>
         
         <div className="stat-box">
@@ -923,7 +873,7 @@ function CityView({ onBack, mapMode }) {
           <div className="material-breakdown">
             {Object.entries(materialCounts).map(([mat, count]) => (
               <div key={mat} className="mat-count-row">
-                <span className="dot" style={{ background: MATERIALS[mat].color }}></span>
+                <span className="dot" style={{ background: MATERIALS[mat] ? MATERIALS[mat].color : "#fff" }}></span>
                 <span className="mat-name">{mat}</span>
                 <span className="mat-count">{count}</span>
               </div>
@@ -945,9 +895,9 @@ function CityView({ onBack, mapMode }) {
           className={`heatmap-toggle-btn ${showHeatMap ? "active" : ""}`}
           onClick={() => setShowHeatMap(!showHeatMap)}
         >
-          🌡️ {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
+          {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
         </button>
-        <button className="hud-btn" onClick={() => setShowBoard(true)}>🏆 BOARD</button>
+        <button className="hud-btn" onClick={() => setShowBoard(true)}>BOARD</button>
         {user && (
           <div className="hud-user">
             <span className="hud-user-name">{user.displayName || user.email}</span>
@@ -955,6 +905,55 @@ function CityView({ onBack, mapMode }) {
           </div>
         )}
       </div>
+
+      {/* ─── BOTTOM BUILD MENU ─── */}
+      {mode === "BUDGET" && (
+        <div className="hud-panel hud-bottom">
+          <div className="mode-toggle vertical" style={{ marginRight: '16px', minWidth: '100px' }}>
+            <button className={activeTab === "MATERIALS" ? "active" : ""} onClick={() => setActiveTab("MATERIALS")}>Materials</button>
+            <button className={activeTab === "BUILDINGS" ? "active" : ""} onClick={() => setActiveTab("BUILDINGS")}>Buildings</button>
+          </div>
+
+          {activeTab === "MATERIALS" ? (
+            <div className="materials-list-horizontal">
+              {Object.entries(MATERIALS).map(([name, data]) => (
+                <div 
+                  key={name} 
+                  className={`material-card-compact ${selectedMaterial === name ? "active" : ""}`}
+                  onClick={() => setSelectedMaterial(name)}
+                >
+                  <span className="mat-name">{name}</span>
+                  <span className="mat-cost">${data.cost / 1000}k</span>
+                  <div className="mat-stats">
+                    <span>Albedo: {data.albedo}</span>
+                    <span>Cooling: {data.cooling}°</span>
+                    {data.income && <span style={{color: '#00ffc8'}}>Income: +${data.income}/s</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="materials-list-horizontal">
+              {Object.entries(BUILDINGS).map(([name, data]) => (
+                <div 
+                  key={name} 
+                  className={`material-card-compact ${selectedBuilding === name ? "active" : ""}`}
+                  onClick={() => setSelectedBuilding(name)}
+                >
+                  <span className="mat-name">{name}</span>
+                  <span className="mat-cost">${data.cost / 1000}k</span>
+                  {name !== "Bulldoze" && (
+                    <div className="mat-stats">
+                      <span>Height: +{data.heightBonus}</span>
+                      <span>{data.type}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Scoreboard overlay */}
       <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
