@@ -7,12 +7,13 @@ import { getFirestore, collection, addDoc, setDoc, doc, query, orderBy, limit, g
 // Replace these placeholder values with YOUR config from:
 //   Firebase Console → Project Settings → Your Apps → Web App → Config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCsQA1ZRKukufy-nIAyhPkdHNHyGW7NSA8",
+  authDomain: "ridgehacks-dd944.firebaseapp.com",
+  projectId: "ridgehacks-dd944",
+  storageBucket: "ridgehacks-dd944.firebasestorage.app",
+  messagingSenderId: "908198359513",
+  appId: "1:908198359513:web:919cac83eea16dba5629c8",
+  measurementId: "G-MZDSQETDEC"
 };
 
 // ─── Initialize Firebase ─────────────────────────────────────────────
@@ -71,6 +72,7 @@ export const saveScore = async (scoreData) => {
 
   return addDoc(collection(db, "scores"), {
     userId: user.uid,
+    playerName: user.displayName || user.email || "Anonymous",
     mode: scoreData.mode,       // "budget" | "heat-hunt" | "sandbox" | "crisis"
     score: scoreData.score,
     avgTemp: scoreData.avgTemp,

@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
+import { useAuth } from "./contexts/AuthContext";
+import LoginScreen from "./components/LoginScreen";
+import Scoreboard from "./components/Scoreboard";
 import "./App.css";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -503,6 +506,8 @@ function CityScene({ blocks }) {
 
 function CityView({ onBack }) {
   const blocks = useMemo(() => generateNYC(), []);
+  const { user, logOut: handleLogOut } = useAuth();
+  const [showBoard, setShowBoard] = useState(false);
 
   return (
     <div className="city-view">
@@ -515,6 +520,13 @@ function CityView({ onBack }) {
           <span>Buildings: {blocks.filter(b => b.height > 0).length}</span>
           <span>Scale: 1u ≈ 3m</span>
         </div>
+        <button className="hud-btn" onClick={() => setShowBoard(true)}>🏆 BOARD</button>
+        {user && (
+          <div className="hud-user">
+            <span className="hud-user-name">{user.displayName || user.email}</span>
+            <button className="hud-btn hud-btn-out" onClick={handleLogOut}>SIGN OUT</button>
+          </div>
+        )}
       </div>
 
       {/* Zone legend */}
@@ -525,6 +537,9 @@ function CityView({ onBack }) {
         <div className="legend-item"><span className="dot" style={{ background: "#8890a0" }} />Mixed Use</div>
         <div className="legend-item"><span className="dot" style={{ background: "#8a8070" }} />Residential</div>
       </div>
+
+      {/* Scoreboard overlay */}
+      <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
 
       {/* 3D Canvas */}
       <Canvas
@@ -544,7 +559,23 @@ function CityView({ onBack }) {
    ══════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
+  const { user, loading } = useAuth();
   const [screen, setScreen] = useState("title");
+
+  // Show loading spinner while Firebase checks auth
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-spinner" />
+      </div>
+    );
+  }
+
+  // Not signed in → show login
+  if (!user) return <LoginScreen />;
+
+  // Signed in → normal flow
   if (screen === "city") return <CityView onBack={() => setScreen("title")} />;
   return <TitleScreen onEnter={() => setScreen("city")} />;
 }
+
