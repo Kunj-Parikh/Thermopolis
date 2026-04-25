@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 6, 14, 0.7);
+  background: rgba(20, 20, 20, 0.75);
   backdrop-filter: blur(6px);
   animation: sb-fade-in 0.25s ease-out;
 }
@@ -25,11 +25,11 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  background: rgba(12, 12, 26, 0.92);
-  border: 1px solid rgba(0, 255, 200, 0.12);
+  background: rgba(28, 28, 28, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   backdrop-filter: blur(20px);
-  box-shadow: 0 0 80px rgba(0, 255, 200, 0.05), 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   animation: sb-slide-up 0.35s ease-out;
   overflow: hidden;
 }
@@ -45,7 +45,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .scoreboard-header-left {
@@ -57,16 +57,16 @@
 .scoreboard-icon { font-size: 1.3rem; }
 
 .scoreboard-title {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.9rem;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 0.95rem;
   font-weight: 700;
-  letter-spacing: 4px;
-  color: #00ffc8;
+  letter-spacing: 2px;
+  color: #d97030;
 }
 
 .scoreboard-close {
   background: none;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   color: #888;
   font-size: 1rem;
@@ -80,9 +80,9 @@
 }
 
 .scoreboard-close:hover {
-  color: #ff4060;
-  border-color: rgba(255, 64, 96, 0.3);
-  background: rgba(255, 64, 96, 0.08);
+  color: #c04030;
+  border-color: rgba(200, 70, 50, 0.3);
+  background: rgba(200, 70, 50, 0.06);
 }
 
 /* ── Content ─────────────────────────────────────────────────────── */
@@ -100,15 +100,15 @@
   gap: 12px;
   padding: 48px 0;
   color: #666;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.78rem;
 }
 
 .scoreboard-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(0,255,200,0.2);
-  border-top-color: #00ffc8;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #d97030;
   border-radius: 50%;
   animation: spinner-spin 0.7s linear infinite;
 }
@@ -122,7 +122,7 @@
   text-align: center;
   padding: 48px 24px;
   color: #666;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.85rem;
 }
 
@@ -136,19 +136,19 @@
 .scoreboard-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.78rem;
 }
 
 .scoreboard-table thead th {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.55rem;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 2px;
-  color: #555;
+  letter-spacing: 1px;
+  color: #666;
   text-align: center;
   padding: 10px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .scoreboard-table tbody tr {
@@ -162,13 +162,13 @@
 }
 
 .scoreboard-table tbody tr:hover {
-  background: rgba(0,255,200,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .scoreboard-table td {
   padding: 12px 16px;
-  color: #bbb;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  color: #aaa;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   text-align: center;
 }
 
@@ -178,39 +178,39 @@
 
 .score-val {
   font-weight: 700;
-  color: #ffaa20;
+  color: #d97030;
 }
 
 /* Current user row */
 .row-me {
-  background: rgba(0, 255, 200, 0.06) !important;
+  background: rgba(217, 112, 48, 0.06) !important;
 }
 
 .row-me td {
-  color: #00ffc8;
+  color: #d97030;
 }
 
 .you-badge {
   display: inline-block;
   margin-left: 8px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: 1px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0, 255, 200, 0.15);
-  color: #00ffc8;
+  background: rgba(217, 112, 48, 0.1);
+  color: #d97030;
   vertical-align: middle;
 }
 
 /* ── Footer ──────────────────────────────────────────────────────── */
 .scoreboard-footer {
   padding: 14px 24px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   text-align: center;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.65rem;
-  color: #444;
-  letter-spacing: 1px;
+  color: #555;
+  letter-spacing: 0.5px;
 }
