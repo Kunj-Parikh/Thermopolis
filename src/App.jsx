@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { useAuth } from "./contexts/AuthContext";
+import LoginScreen from "./components/LoginScreen";
+import Scoreboard from "./components/Scoreboard";
 import "./App.css";
 
 class ErrorBoundary extends React.Component {
@@ -465,6 +468,9 @@ function CityView({ onBack }) {
     acc[c.material] = (acc[c.material] || 0) + 1;
     return acc;
   }, {});
+  const blocks = useMemo(() => generateNYC(), []);
+  const { user, logOut: handleLogOut } = useAuth();
+  const [showBoard, setShowBoard] = useState(false);
 
   return (
     <div className="city-layout">
@@ -580,17 +586,58 @@ function CityView({ onBack }) {
             <span>45°C</span>
           </div>
         </div>
+        <button className="hud-btn" onClick={() => setShowBoard(true)}>🏆 BOARD</button>
+        {user && (
+          <div className="hud-user">
+            <span className="hud-user-name">{user.displayName || user.email}</span>
+            <button className="hud-btn hud-btn-out" onClick={handleLogOut}>SIGN OUT</button>
+          </div>
+        )}
       </div>
+
+      {/* Zone legend */}
+      <div className="city-legend">
+        <div className="legend-item"><span className="dot" style={{ background: "#b8ccd8" }} />Midtown</div>
+        <div className="legend-item"><span className="dot" style={{ background: "#bcc8d0" }} />Financial District</div>
+        <div className="legend-item"><span className="dot" style={{ background: "#1d5c25" }} />Central Park</div>
+        <div className="legend-item"><span className="dot" style={{ background: "#8890a0" }} />Mixed Use</div>
+        <div className="legend-item"><span className="dot" style={{ background: "#8a8070" }} />Residential</div>
+      </div>
+
+      {/* Scoreboard overlay */}
+      <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
+
+      {/* 3D Canvas */}
+      <Canvas
+        shadows
+        camera={{ position: [100, 90, 100], fov: 42 }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        gl={{ antialias: true }}
+      >
+        <CityScene blocks={blocks} />
+      </Canvas>
     </div>
   );
 }
 
 export default function App() {
+  const { user, loading } = useAuth();
   const [screen, setScreen] = useState("title");
-  
-  return (
-    <ErrorBoundary>
-      {screen === "city" ? <CityView onBack={() => setScreen("title")} /> : <TitleScreen onEnter={() => setScreen("city")} />}
-    </ErrorBoundary>
-  );
+
+  // Show loading spinner while Firebase checks auth
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-spinner" />
+      </div>
+    );
+  }
+
+  // Not signed in → show login
+  if (!user) return <LoginScreen />;
+
+  // Signed in → normal flow
+  if (screen === "city") return <CityView onBack={() => setScreen("title")} />;
+  return <TitleScreen onEnter={() => setScreen("city")} />;
 }
+
