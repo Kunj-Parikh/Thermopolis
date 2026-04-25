@@ -10,6 +10,7 @@ import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
 import SatelliteSetup from "./components/SatelliteSetup";
 import WheelSpinner from "./components/WheelSpinner";
+import InfoPage from "./components/InfoPage";
 import "./App.css";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -87,6 +88,7 @@ function TitleScreen({ onEnter, onSatellite }) {
           <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
           <button className="enter-btn" style={{ background: '#c06020' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
           <button className="enter-btn" onClick={onSatellite} style={{ background: "linear-gradient(90deg, #00ffc8, #0088ff)" }}>SATELLITE PIPELINE</button>
+          <button className="enter-btn" style={{ background: '#00aaff' }} onClick={() => onEnter("INFO")}>SCIENCE INFO</button>
         </div>
         <div className="title-badges">
           <span>React</span>
@@ -1444,6 +1446,10 @@ export default function App() {
         }}
       />
     );
+  }
+
+  if (screen === "INFO") {
+    return <InfoPage onBack={() => setScreen("title")} />;
   }
 
   return <TitleScreen onEnter={(mode) => { setSimConfig(null); setScreen(mode); }} onSatellite={() => setScreen("SATELLITE")} />;
