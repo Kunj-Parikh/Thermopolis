@@ -1,0 +1,28 @@
+===============================================
+  THERMOPOLIS — Installation Commands (Windows)
+===============================================
+
+Step 1: Create the React app with Vite in this directory
+  npx -y create-vite@latest ./ -- --template react
+
+Step 2: Install base dependencies
+  npm install
+
+Step 3: Install Three.js (r128 pinned)
+  npm install three@0.128.0
+
+Step 4: Install React-Three integration (for raycasting, camera controls, etc.)
+  npm install @react-three/fiber@8 @react-three/drei@9
+
+Step 5: Install Firebase
+  npm install firebase
+
+Step 6: Install Google Fonts (Orbitron + Space Mono) — loaded via CSS, no npm needed
+
+Step 7: Start the dev server
+  npm run dev
+
+===============================================
+  Run these commands IN ORDER in PowerShell
+  from the project root:  c:\Personal\GitHub\RHS
+===============================================
