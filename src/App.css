@@ -7,19 +7,19 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #06060e;
-  font-family: 'Space Mono', monospace; /* Default technical font */
-  color: #fff;
+  background: #1a1a1a;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  color: #e0ddd8;
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Orbitron', sans-serif; /* Futuristic headings */
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   margin: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 button {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   cursor: pointer;
   border: none;
   background: none;
@@ -44,47 +44,48 @@ button {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: rgba(10, 10, 20, 0.7);
-  padding: 60px 80px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 64, 96, 0.3);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.5), inset 0 0 40px rgba(255, 64, 96, 0.1);
+  background: rgba(30, 30, 30, 0.9);
+  padding: 50px 80px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.4);
 }
 
 .title-logo {
-  font-size: 5rem;
+  font-size: 6.5rem;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
   color: #fff;
-  text-shadow: 0 0 20px rgba(255, 64, 96, 0.8), 0 0 40px rgba(255, 64, 96, 0.4);
   letter-spacing: 0.1em;
-  margin-bottom: 20px;
+  margin-bottom: 60px;
 }
 
 .title-tagline {
-  font-size: 1.2rem;
-  color: #a0a0b0;
+  font-size: 1.1rem;
+  color: #999;
   max-width: 600px;
   margin-bottom: 40px;
   line-height: 1.6;
 }
 
 .enter-btn {
-  background: linear-gradient(135deg, #ff4060, #d02040);
+  background: #d97030;
   color: white;
-  font-size: 1.5rem;
-  font-weight: bold;
+  font-size: 1.4rem;
+  font-weight: 600;
   padding: 16px 48px;
-  border-radius: 4px;
-  transition: all 0.3s ease;
+  border-radius: 8px;
+  transition: all 0.2s ease;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  box-shadow: 0 10px 20px rgba(255, 64, 96, 0.3);
+  letter-spacing: 0.06em;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .enter-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 15px 30px rgba(255, 64, 96, 0.5);
-  background: linear-gradient(135deg, #ff5070, #e03050);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  background: #e07838;
 }
 
 .title-badges {
@@ -98,8 +99,8 @@ button {
   background: rgba(255, 255, 255, 0.05);
   padding: 6px 12px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #888;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #777;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -111,12 +112,11 @@ button {
   height: 100vh;
   overflow: hidden;
   background: #000;
-  /* Allow clicking through the container to the canvas */
   pointer-events: none;
 }
 
 .city-layout > * {
-  pointer-events: auto; /* Re-enable pointer events for UI elements */
+  pointer-events: auto;
 }
 
 /* Center Canvas */
@@ -131,12 +131,12 @@ button {
 .hud-panel {
   position: absolute;
   z-index: 10;
-  background: rgba(12, 12, 16, 0.8);
-  backdrop-filter: blur(12px);
+  background: rgba(28, 28, 28, 0.92);
+  backdrop-filter: blur(16px);
   padding: 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -160,7 +160,7 @@ button {
 
 .hud-bottom {
   bottom: 10px;
-  left: 280px; /* 260px width + 20px margin */
+  left: 280px;
   right: 500px;
   width: auto;
   padding: 10px 16px;
@@ -171,43 +171,46 @@ button {
 
 .panel-title {
   font-size: 1.1rem;
-  letter-spacing: 1px;
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: 0.5px;
+  color: #e0ddd8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 6px;
   margin-bottom: 2px;
 }
 
 .back-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  color: #bbb;
   padding: 10px 16px;
-  border-radius: 4px;
-  font-weight: bold;
+  border-radius: 8px;
+  font-weight: 600;
   align-self: flex-start;
   transition: 0.2s;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
-.back-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.back-btn:hover { 
+  background: rgba(255, 255, 255, 0.1); 
+  color: #ddd;
+}
 
 /* Mode Toggle */
 .mode-toggle {
   display: flex;
-  background: rgba(0,0,0,0.5);
-  border-radius: 6px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 8px;
   padding: 4px;
 }
 .mode-toggle button {
   flex: 1;
   padding: 12px;
-  color: #888;
-  border-radius: 4px;
+  color: #777;
+  border-radius: 6px;
   transition: 0.2s;
 }
 .mode-toggle button.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font-weight: bold;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0ddd8;
+  font-weight: 600;
 }
 
 .mode-toggle.vertical {
@@ -224,76 +227,74 @@ button {
 
 /* Budget Mode */
 .budget-display {
-  background: rgba(0, 255, 200, 0.1);
-  border: 1px solid rgba(0, 255, 200, 0.3);
-  border-radius: 8px;
+  background: rgba(217, 112, 48, 0.08);
+  border: 1px solid rgba(217, 112, 48, 0.2);
+  border-radius: 10px;
   padding: 16px;
   text-align: center;
   margin-bottom: 8px;
 }
-.budget-display h4 { color: #00ffc8; font-size: 12px; margin-bottom: 8px; letter-spacing: 1px; }
-.budget-val { font-size: 1.7rem; font-family: 'Orbitron'; color: #fff; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,200,0.5); }
+.budget-display h4 { color: #d97030; font-size: 12px; margin-bottom: 8px; letter-spacing: 0.5px; }
+.budget-val { font-size: 1.7rem; color: #fff; font-weight: 700; }
 
 /* Horizontal Materials List */
 .materials-list-horizontal {
   display: flex;
   flex-direction: row;
-  /* width:  */
   gap: 12px;
   overflow-x: auto;
-  padding: 4px 4px 12px 4px; /* Padding for scrollbar and glow */
+  padding: 4px 4px 12px 4px;
   flex: 1;
 }
 
 /* Custom Scrollbar for horizontal list */
 .materials-list-horizontal::-webkit-scrollbar {
-  height: 8px;
+  height: 6px;
 }
 .materials-list-horizontal::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
 }
 .materials-list-horizontal::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
 }
 .materials-list-horizontal::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .material-card-compact {
   flex: 0 0 auto;
   width: 90px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
   padding: 8px 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  /* font-size: 22px; */
   gap: 4px;
 }
 .material-card-compact:hover { 
-  background: rgba(255, 255, 255, 0.08); 
+  background: rgba(255, 255, 255, 0.07); 
   transform: translateY(-2px); 
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 .material-card-compact.active {
-  border-color: #00ffc8;
-  background: rgba(0, 255, 200, 0.1);
-  box-shadow: 0 0 10px rgba(0,255,200,0.2) inset, 0 2px 8px rgba(0,255,200,0.2);
+  border-color: #d97030;
+  background: rgba(217, 112, 48, 0.08);
+  box-shadow: 0 0 0 1px rgba(217, 112, 48, 0.3);
   transform: translateY(-2px); 
 }
-.material-card-compact .mat-name { font-weight: bold; font-size: 12px; color: #fff; margin-bottom: 2px; line-height: 1.2; }
-.material-card-compact .mat-cost { color: #ffeb3b; font-size: 13px; font-weight: bold; margin-bottom: 2px; line-height: 1.2; }
+.material-card-compact .mat-name { font-weight: 600; font-size: 12px; color: #ddd; margin-bottom: 2px; line-height: 1.2; }
+.material-card-compact .mat-cost { color: #d97030; font-size: 13px; font-weight: 700; margin-bottom: 2px; line-height: 1.2; }
 .material-card-compact .mat-stats { 
   font-size: 10px; 
-  color: #aaa; 
+  color: #888; 
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -303,9 +304,9 @@ button {
 /* Heat Hunt Mode */
 .hint-text { font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.4; }
 .sensor-log {
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
   padding: 12px;
   height: 250px;
   overflow-y: auto;
@@ -314,42 +315,41 @@ button {
   gap: 8px;
 }
 .empty-log { color: #555; font-size: 12px; text-align: center; margin-top: 20px; }
-.log-entry { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
+.log-entry { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 4px; }
 .log-entry .time { color: #888; }
-.log-entry .temp { color: #ff4060; font-weight: bold; }
+.log-entry .temp { color: #d97030; font-weight: 600; }
 
 .lock-in-btn {
-  background: #ff4060;
+  background: #d97030;
   color: white;
   padding: 16px;
-  font-family: 'Orbitron';
-  font-weight: bold;
-  border-radius: 6px;
-  letter-spacing: 1px;
+  font-weight: 700;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
   margin-top: auto;
 }
-.lock-in-btn:hover { background: #ff5070; box-shadow: 0 0 20px rgba(255,64,96,0.4); }
+.lock-in-btn:hover { background: #e07838; box-shadow: 0 4px 16px rgba(217,112,48,0.25); }
 
 /* Right Panel Stats */
 .stat-box {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
 }
-.stat-box h4 { color: #888; font-size: 10px; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
-.stat-box .value { font-family: 'Orbitron'; font-weight: bold; font-size: 20px; }
+.stat-box h4 { color: #888; font-size: 10px; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase; font-weight: 600; }
+.stat-box .value { font-weight: 700; font-size: 20px; }
 
 .material-breakdown { display: flex; flex-direction: column; gap: 4px; }
 .mat-count-row { display: flex; align-items: center; font-size: 11px; }
 .mat-count-row .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
-.mat-count-row .mat-name { flex: 1; color: #ccc; }
-.mat-count-row .mat-count { font-weight: bold; color: #fff; }
+.mat-count-row .mat-name { flex: 1; color: #aaa; }
+.mat-count-row .mat-count { font-weight: 600; color: #ddd; }
 
 .temp-legend .gradient-bar {
   height: 12px;
   border-radius: 6px;
-  background: linear-gradient(to right, #2a7aaa, #3a9e40, #ffeb3b, #ff4060);
+  background: linear-gradient(to right, #3070a0, #50a050, #e0b040, #c04030);
   margin-bottom: 8px;
 }
 .gradient-labels { display: flex; justify-content: space-between; font-size: 12px; color: #888; }
@@ -359,35 +359,36 @@ button {
    ═══════════════════════════════════════════════════════════════════ */
 
 .hud-btn {
-  font-family: var(--font-mono);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   padding: 8px 14px;
-  border: 1px solid var(--accent);
-  background: #0a0a16cc;
-  color: var(--accent);
-  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 28, 28, 0.9);
+  color: #ccc;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   white-space: nowrap;
 }
 
 .hud-btn:hover {
-  background: var(--accent);
-  color: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .hud-btn-out {
-  border-color: var(--hot);
-  color: var(--hot);
+  border-color: rgba(200, 70, 50, 0.3);
+  color: #c04030;
   font-size: 0.62rem;
   padding: 5px 10px;
 }
 
 .hud-btn-out:hover {
-  background: var(--hot);
-  color: #fff;
+  background: rgba(200, 70, 50, 0.1);
+  color: #d05040;
 }
 
 .hud-user {
@@ -398,9 +399,9 @@ button {
 }
 
 .hud-user-name {
-  font-family: var(--font-mono);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: #888;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -417,14 +418,14 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
+  background: #1a1a1a;
 }
 
 .app-loading-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(0, 255, 200, 0.15);
-  border-top-color: var(--accent);
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #d97030;
   border-radius: 50%;
   animation: app-spin 0.8s linear infinite;
 }
@@ -440,26 +441,23 @@ button {
 .heatmap-toggle-btn {
   width: 100%;
   padding: 14px;
-  font-family: 'Orbitron', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 2px;
-  border: 1px solid rgba(255, 170, 32, 0.4);
-  border-radius: 6px;
-  background: rgba(255, 170, 32, 0.08);
-  color: #ffaa20;
+  letter-spacing: 1px;
+  border: 1px solid rgba(217, 112, 48, 0.25);
+  border-radius: 8px;
+  background: rgba(217, 112, 48, 0.06);
+  color: #d97030;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
 }
 
 .heatmap-toggle-btn:hover {
-  background: rgba(255, 170, 32, 0.15);
-  box-shadow: 0 0 20px rgba(255, 170, 32, 0.15);
+  background: rgba(217, 112, 48, 0.1);
 }
 
 .heatmap-toggle-btn.active {
-  background: rgba(255, 64, 96, 0.15);
-  border-color: rgba(255, 64, 96, 0.5);
-  color: #ff4060;
-  box-shadow: 0 0 20px rgba(255, 64, 96, 0.2), inset 0 0 20px rgba(255, 64, 96, 0.05);
+  background: rgba(200, 70, 50, 0.1);
+  border-color: rgba(200, 70, 50, 0.3);
+  color: #c04030;
 }

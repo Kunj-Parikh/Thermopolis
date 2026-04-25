@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
-import { saveScore } from "./firebase";
+import { saveScore, clearAllScores } from "./firebase";
 import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
 import WheelSpinner from "./components/WheelSpinner";
@@ -78,18 +78,32 @@ function TitleScreen({ onEnter }) {
       <TitleScene />
       <div className="title-overlay">
         <h1 className="title-logo">THERMOPOLIS</h1>
-        <p className="title-tagline">Every surface choice has a measurable temperature consequence.</p>
         <div style={{ display: 'flex', gap: '16px' }}>
           <button className="enter-btn" onClick={() => onEnter("CITY")}>ENTER CITY</button>
           <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
-          <button className="enter-btn" style={{ background: 'linear-gradient(135deg, #ffaa20, #ff4060)' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
-        </div>
-        <div className="title-badges">
-          <span>React</span>
-          <span>Three.js r{THREE.REVISION}</span>
-          <span>Firebase</span>
+          <button className="enter-btn" style={{ background: '#c06020' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
         </div>
       </div>
+      {/* Invisible secret admin button to clear leaderboard */}
+      <button 
+        style={{
+          position: 'absolute', bottom: 0, left: 0, 
+          width: '50px', height: '50px', 
+          background: 'transparent', border: 'none', 
+          cursor: 'default', zIndex: 100 
+        }}
+        onClick={async () => {
+          if (window.confirm("SECRET ADMIN ACTION: Delete all leaderboard entries?")) {
+            try {
+              await clearAllScores();
+              alert("All leaderboard entries have been deleted.");
+            } catch (err) {
+              alert("Error clearing leaderboard: " + err.message);
+            }
+          }
+        }}
+        title=""
+      />
     </div>
   );
 }
@@ -275,11 +289,35 @@ function pickModel(zone, rng) {
   }
 }
 
-function generateInitialGrid(mapMode) {
+function generateInitialGrid(mapMode, randomSeed) {
+  const baseSeed = randomSeed || 42;
+  const globalRng = seededRng(baseSeed);
+  
+  // Procedural Voronoi seeds for HEAT_HUNT patches
+  const matSeeds = [];
+  const bldgSeeds = [];
+  if (mapMode === "HEAT_HUNT") {
+    const matKeys = Object.keys(MATERIALS);
+    for (let i = 0; i < 12; i++) { // Fewer seeds = much larger patches
+      matSeeds.push({
+        c: globalRng() * GRID_COLS,
+        r: globalRng() * GRID_ROWS,
+        mat: matKeys[Math.floor(globalRng() * matKeys.length)]
+      });
+    }
+    for (let i = 0; i < 40; i++) {
+      bldgSeeds.push({
+        c: globalRng() * GRID_COLS,
+        r: globalRng() * GRID_ROWS,
+        isBldg: globalRng() > 0.6, // 40% chance for a patch to be buildings
+      });
+    }
+  }
+
   const grid = [];
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
-      const rng = seededRng(col * 1337 + row * 7919 + 42);
+      const rng = seededRng(col * 1337 + row * 7919 + baseSeed);
       const zone = getZone(col, row);
       const cx = (col - GRID_COLS / 2 + 0.5) * CELL;
       const cz = (row - GRID_ROWS / 2 + 0.5) * CELL;
@@ -292,9 +330,30 @@ function generateInitialGrid(mapMode) {
       let heightBonus = 0;
 
       if (mapMode === "HEAT_HUNT") {
-        const matKeys = Object.keys(MATERIALS);
-        initialMaterial = matKeys[Math.floor(rng() * matKeys.length)];
-        isBuilding = rng() > 0.5;
+        // Nearest material patch
+        let bestMatDist = Infinity;
+        for (const s of matSeeds) {
+          const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.2); // Reduced noise for cleaner edges
+          if (dist < bestMatDist) {
+            bestMatDist = dist;
+            initialMaterial = s.mat;
+          }
+        }
+        
+        // Nearest building patch
+        let bestBldgDist = Infinity;
+        for (const s of bldgSeeds) {
+          const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.5); // Slightly more noise for buildings
+          if (dist < bestBldgDist) {
+            bestBldgDist = dist;
+            isBuilding = s.isBldg;
+          }
+        }
+
+        if (isBuilding) {
+          initialMaterial = "Asphalt";
+        }
+
         modelPath = isBuilding ? pickModel("mixed", rng) : null;
         if (modelPath?.includes("skyscraper")) heightBonus = 4;
         else if (modelPath?.includes("building-")) heightBonus = 2;
@@ -411,7 +470,7 @@ function AnimatedWater({ cx, cz }) {
   });
   
   return (
-    <mesh position={[cx, 0.1, cz]} receiveShadow>
+    <mesh position={[cx, 0.1, cz]}>
       <boxGeometry args={[CELL, 0.2, CELL, 32, 1, 32]} />
       <shaderMaterial
         ref={materialRef}
@@ -508,9 +567,9 @@ function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial 
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
-      <primitive object={clonedScene} castShadow receiveShadow />
+      <primitive object={clonedScene} />
       {showOverlay && (
-        <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]} castShadow receiveShadow>
+        <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]}>
           <boxGeometry args={[size.x * 0.9, overlayThickness, size.z * 0.9]} />
           <meshStandardMaterial color={overlayColor} map={getMaterialTexture(appliedMaterial)} roughness={0.8} />
         </mesh>
@@ -575,7 +634,7 @@ function Ground() {
   const totalW = GRID_COLS * CELL + 60;
   const totalD = GRID_ROWS * CELL + 60;
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
       <planeGeometry args={[totalW, totalD]} />
       <meshStandardMaterial color="#333333" roughness={0.97} />
     </mesh>
@@ -600,14 +659,29 @@ function LoadingFallback() {
 
 // SceneFog replaced by <fogExp2 /> in CityScene
 
-function CityScene({ grid, onGridClick, showHeatMap }) {
+function ColdestBeam({ cell }) {
+  const meshRef = useRef();
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.material.opacity = 0.4 + Math.sin(state.clock.elapsedTime * 3) * 0.2;
+    }
+  });
+  return (
+    <mesh ref={meshRef} position={[cell.cx, 25, cell.cz]}>
+      <cylinderGeometry args={[0.8, 0.8, 50, 16]} />
+      <meshBasicMaterial color="#40a0ff" transparent opacity={0.5} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function CityScene({ grid, onGridClick, showHeatMap, huntLowest, huntState }) {
   return (
     <>
       <fogExp2 attach="fog" args={["#c8ddf0", 0.004]} />
       <color attach="background" args={["#87ceeb"]} />
       <Sky distance={4500} sunPosition={[100, 40, -80]} inclination={0.52} azimuth={0.22} turbidity={6} rayleigh={0.8} />
       <ambientLight intensity={0.75} color="#fff4e0" />
-      <directionalLight position={[100, 140, -80]} intensity={3.2} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-camera-far={500} shadow-camera-left={-130} shadow-camera-right={130} shadow-camera-top={130} shadow-camera-bottom={-130} shadow-bias={-0.0005} />
+      <directionalLight position={[100, 140, -80]} intensity={3.2} />
       
       <Ground />
       
@@ -650,7 +724,7 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
               const matColor = MATERIALS[c.material].color;
               const tex = getMaterialTexture(c.material);
               return (
-                <mesh key={c.key} position={[c.cx + dx, 0.1, c.cz + dz]} receiveShadow>
+                <mesh key={c.key} position={[c.cx + dx, 0.1, c.cz + dz]}>
                   <boxGeometry args={[width, 0.2, depth]} />
                   <meshStandardMaterial color={matColor} map={tex} roughness={0.9} />
                 </mesh>
@@ -670,6 +744,8 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
         </group>
       </Suspense>
 
+      {huntState === "game_over" && huntLowest && <ColdestBeam cell={huntLowest} />}
+
       <KeyboardPanControls />
       <OrbitControls 
         makeDefault
@@ -685,7 +761,8 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
 }
 
 function CityView({ onBack, mapMode }) {
-  const [grid, setGrid] = useState(() => generateInitialGrid(mapMode));
+  const [huntSeed, setHuntSeed] = useState(() => Math.floor(Math.random() * 1000000));
+  const [grid, setGrid] = useState(() => generateInitialGrid(mapMode, mapMode === "HEAT_HUNT" ? huntSeed : undefined));
   const [budget, setBudget] = useState(2000000); // $2M starting budget
   const [mode, setMode] = useState(mapMode === "HEAT_HUNT" ? "HEAT_HUNT" : "BUDGET"); // "BUDGET" or "HEAT_HUNT"
   const [activeTab, setActiveTab] = useState("MATERIALS"); // "MATERIALS" or "BUILDINGS"
@@ -698,6 +775,7 @@ function CityView({ onBack, mapMode }) {
   const [huntState, setHuntState] = useState("playing");
   const [huntScore, setHuntScore] = useState(0);
   const [huntGuess, setHuntGuess] = useState(null);
+  const [pendingGuess, setPendingGuess] = useState(null);
   const [huntLowest, setHuntLowest] = useState(null);
 
   // Heat Simulation Loop (runs every 1 second)
@@ -806,27 +884,33 @@ function CityView({ onBack, mapMode }) {
         }
       } else if (mode === "HEAT_HUNT") {
         if (huntState !== "playing") return;
-
-        // Find actual lowest temp cell right now
-        let lowest = grid[0];
-        for (let i = 1; i < grid.length; i++) {
-          if (grid[i].currentTemp < lowest.currentTemp) lowest = grid[i];
-        }
-
-        const guessedTemp = cell.currentTemp;
-        const lowestTemp = lowest.currentTemp;
-        const scoreDiff = Math.abs(guessedTemp - lowestTemp);
-        const finalScore = Math.max(0, Math.round(1000 - scoreDiff * 100));
-
-        setHuntGuess(cell);
-        setHuntLowest(lowest);
-        setHuntScore(finalScore);
-        setHuntState("game_over");
-
-        if (user) {
-          saveScore({ mode: "heat-hunt", score: finalScore, avgTemp: scoreDiff, extras: { guessedTemp, lowestTemp } }).catch(console.error);
-        }
+        setPendingGuess(cell);
       }
+    }
+  };
+
+  const confirmGuess = () => {
+    if (!pendingGuess) return;
+    const cell = pendingGuess;
+    setPendingGuess(null);
+
+    let lowest = grid[0];
+    for (let i = 1; i < grid.length; i++) {
+      if (grid[i].currentTemp < lowest.currentTemp) lowest = grid[i];
+    }
+
+    const guessedTemp = cell.currentTemp;
+    const lowestTemp = lowest.currentTemp;
+    const scoreDiff = Math.abs(guessedTemp - lowestTemp);
+    const finalScore = Math.max(0, Math.round(1000 - scoreDiff * 100));
+
+    setHuntGuess(cell);
+    setHuntLowest(lowest);
+    setHuntScore(finalScore);
+    setHuntState("game_over");
+
+    if (user) {
+      saveScore({ mode: "heat-hunt", score: finalScore, avgTemp: scoreDiff, extras: { guessedTemp, lowestTemp } }).catch(console.error);
     }
   };
 
@@ -847,8 +931,8 @@ function CityView({ onBack, mapMode }) {
     <div className="city-layout">
       {/* ─── CENTER 3D CANVAS (BACKGROUND) ─── */}
       <div className="center-canvas">
-        <Canvas shadows camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
-          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} />
+        <Canvas camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
+          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} huntLowest={huntLowest} huntState={huntState} />
         </Canvas>
       </div>
 
@@ -873,10 +957,10 @@ function CityView({ onBack, mapMode }) {
               onClick={() => setShowSpinner(true)}
               style={{
                 marginTop: '10px', width: '100%', padding: '8px', 
-                background: 'linear-gradient(135deg, #ff4060, #ffaa20)',
-                color: '#fff', border: 'none', borderRadius: '4px',
-                fontFamily: 'Orbitron', fontWeight: 'bold', cursor: 'pointer',
-                letterSpacing: '1px', boxShadow: '0 0 10px rgba(255, 64, 96, 0.4)'
+                background: '#d97030',
+                color: '#fff', border: 'none', borderRadius: '8px',
+                fontWeight: 'bold', cursor: 'pointer',
+                letterSpacing: '0.5px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
               }}
             >
               SPIN FOR FUNDS
@@ -888,19 +972,19 @@ function CityView({ onBack, mapMode }) {
           <div className="mode-content heat-hunt-mode">
             <h3>HEAT HUNT</h3>
             {huntState === "playing" ? (
-              <p style={{color: '#a0b0d0', lineHeight: 1.5}}>
-                The city is a chaotic thermal mess! You have ONE guess. <strong style={{color: '#fff'}}>Click the tile that you think has the LOWEST temperature.</strong>
+              <p style={{color: '#9a8e80', lineHeight: 1.5}}>
+                The city is a chaotic thermal mess! You have ONE guess. <strong style={{color: '#e8e0d4'}}>Click the tile that you think has the LOWEST temperature.</strong>
               </p>
             ) : (
               <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(0,0,0,0.5)', borderRadius: '8px' }}>
-                <h2 style={{color: '#00ffc8', fontSize: '32px', margin: '0 0 10px 0'}}>{huntScore} <span style={{fontSize:'16px'}}>PTS</span></h2>
-                <p style={{margin: '5px 0', color: '#a0b0d0'}}>
-                  Guessed Temp: <strong style={{color: '#fff'}}>{huntGuess?.currentTemp.toFixed(1)}°C</strong>
+                <h2 style={{color: '#f0c870', fontSize: '32px', margin: '0 0 10px 0'}}>{huntScore} <span style={{fontSize:'16px'}}>PTS</span></h2>
+                <p style={{margin: '5px 0', color: '#9a8e80'}}>
+                  Guessed Temp: <strong style={{color: '#e8e0d4'}}>{huntGuess?.currentTemp.toFixed(1)}°C</strong>
                 </p>
-                <p style={{margin: '5px 0', color: '#a0b0d0'}}>
-                  Lowest Temp: <strong style={{color: '#00aaff'}}>{huntLowest?.currentTemp.toFixed(1)}°C</strong>
+                <p style={{margin: '5px 0', color: '#9a8e80'}}>
+                  Lowest Temp: <strong style={{color: '#60a0d0'}}>{huntLowest?.currentTemp.toFixed(1)}°C</strong>
                 </p>
-                <p style={{margin: '5px 0', color: '#ff4060'}}>
+                <p style={{margin: '5px 0', color: '#dc5040'}}>
                   Difference: {Math.abs(huntGuess?.currentTemp - huntLowest?.currentTemp).toFixed(1)}°C
                 </p>
                 
@@ -908,13 +992,15 @@ function CityView({ onBack, mapMode }) {
                   className="hud-btn" 
                   style={{marginTop: '20px', width: '100%'}}
                   onClick={() => {
+                    const newSeed = Math.floor(Math.random() * 1000000);
+                    setHuntSeed(newSeed);
                     setHuntState("playing");
                     setHuntGuess(null);
                     setHuntLowest(null);
-                    setGrid(generateInitialGrid("HEAT_HUNT"));
+                    setGrid(generateInitialGrid("HEAT_HUNT", newSeed));
                   }}
                 >
-                  🔄 PLAY AGAIN
+                  PLAY AGAIN
                 </button>
               </div>
             )}
@@ -928,22 +1014,22 @@ function CityView({ onBack, mapMode }) {
         
         <div className="stat-box">
           <h4>Avg City Temp</h4>
-          <div className="value" style={{ color: avgTemp > 35 ? "#ff4060" : "#00ffc8" }}>
+          <div className="value" style={{ color: avgTemp > 35 ? "#dc5040" : "#60b060" }}>
             {avgTemp.toFixed(1)} °C
           </div>
         </div>
 
         <div className="stat-box">
           <h4>Hottest Block</h4>
-          <div className="value" style={{ color: "#ff4060", fontSize: "18px" }}>
-            {hottest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#888"}}>({hottest.zone})</span>
+          <div className="value" style={{ color: "#dc5040", fontSize: "18px" }}>
+            {hottest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#6a6058"}}>({hottest.zone})</span>
           </div>
         </div>
 
         <div className="stat-box">
           <h4>Coolest Block</h4>
-          <div className="value" style={{ color: "#00aaff", fontSize: "18px" }}>
-            {coolest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#888"}}>({coolest.zone})</span>
+          <div className="value" style={{ color: "#60a0d0", fontSize: "18px" }}>
+            {coolest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#6a6058"}}>({coolest.zone})</span>
           </div>
         </div>
 
@@ -976,7 +1062,7 @@ function CityView({ onBack, mapMode }) {
         >
           {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
         </button>
-        <button className="hud-btn" onClick={() => setShowBoard(true)}>BOARD</button>
+        <button className="hud-btn" onClick={() => setShowBoard(true)}>LEADERBOARD</button>
         {user && (
           <div className="hud-user">
             <span className="hud-user-name">{user.displayName || user.email}</span>
@@ -1006,7 +1092,7 @@ function CityView({ onBack, mapMode }) {
                   <div className="mat-stats">
                     <span>Albedo: {data.albedo}</span>
                     <span>Cooling: {data.cooling}°</span>
-                    {data.income && <span style={{color: '#00ffc8'}}>Income: +${data.income}/s</span>}
+                    {data.income && <span style={{color: '#60b060'}}>Income: +${data.income}/s</span>}
                   </div>
                 </div>
               ))}
@@ -1043,6 +1129,53 @@ function CityView({ onBack, mapMode }) {
         onClose={() => setShowSpinner(false)} 
         onWin={(amount) => setBudget(b => b + amount)} 
       />
+
+      {/* Heat Hunt Confirmation Popup */}
+      {pendingGuess && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 60,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          pointerEvents: 'auto'
+        }} onClick={() => setPendingGuess(null)}>
+          <div style={{
+            background: 'rgba(28, 28, 28, 0.97)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '14px', padding: '32px 40px',
+            textAlign: 'center', maxWidth: '360px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{margin: '0 0 12px 0', color: '#e0ddd8', fontSize: '18px'}}>Lock in your guess?</h3>
+            <p style={{color: '#999', fontSize: '14px', margin: '0 0 8px 0'}}>
+              Tile at ({pendingGuess.col}, {pendingGuess.row}) — {pendingGuess.material}
+            </p>
+            <p style={{color: '#777', fontSize: '12px', margin: '0 0 24px 0'}}>
+              You only get one guess. This cannot be undone.
+            </p>
+            <div style={{display: 'flex', gap: '12px', justifyContent: 'center'}}>
+              <button 
+                onClick={() => setPendingGuess(null)}
+                style={{
+                  padding: '10px 24px', borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.06)', color: '#aaa',
+                  border: '1px solid rgba(255,255,255,0.1)', fontWeight: '600',
+                  cursor: 'pointer', transition: '0.15s'
+                }}
+              >Cancel</button>
+              <button 
+                onClick={confirmGuess}
+                style={{
+                  padding: '10px 24px', borderRadius: '8px',
+                  background: '#d97030', color: '#fff',
+                  border: 'none', fontWeight: '700',
+                  cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  transition: '0.15s'
+                }}
+              >Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
