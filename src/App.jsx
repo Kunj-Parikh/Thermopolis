@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
 import { OrbitControls, Sky } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
@@ -257,9 +257,6 @@ roadCanvas.height = 256;
 const roadCtx = roadCanvas.getContext("2d");
 roadCtx.fillStyle = "#222222";
 roadCtx.fillRect(0, 0, 256, 256);
-roadCtx.fillStyle = "#eeeeee";
-roadCtx.fillRect(124, 0, 8, 64);
-roadCtx.fillRect(124, 128, 8, 64);
 const ROAD_TEXTURE = new THREE.CanvasTexture(roadCanvas);
 ROAD_TEXTURE.wrapS = THREE.RepeatWrapping;
 ROAD_TEXTURE.wrapT = THREE.RepeatWrapping;
@@ -976,7 +973,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
   const [huntSeed, setHuntSeed] = useState(() => Math.floor(Math.random() * 1000000));
   const [grid, setGrid] = useState(() => initialGrid || generateInitialGrid(mapMode, mapMode === "HEAT_HUNT" ? huntSeed : undefined));
   const [budget, setBudget] = useState(2000000); // $2M starting budget
-  const [mode, setMode] = useState(mapMode === "HEAT_HUNT" ? "HEAT_HUNT" : "BUDGET"); // "BUDGET" or "HEAT_HUNT"
+  const [mode, setMode] = useState(mapMode === "HEAT_HUNT" ? "HEAT_HUNT" : (mapMode === "SANDBOX" ? "SANDBOX" : "BUDGET")); // "BUDGET", "HEAT_HUNT", or "SANDBOX"
   const [activeTab, setActiveTab] = useState("MATERIALS"); // "MATERIALS" or "BUILDINGS"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
   const [selectedBuilding, setSelectedBuilding] = useState("Small Building");
@@ -1046,7 +1043,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
       
       if (cell.isRural) return;
 
-      if (mode === "BUDGET") {
+      if (mode === "BUDGET" || mode === "SANDBOX") {
         if (activeTab === "MATERIALS") {
           const matData = MATERIALS[selectedMaterial];
           let targetCell = cell;
@@ -1054,8 +1051,8 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
             targetCell = grid.find(c => c.key === cell.masterKey) || cell;
           }
           // Skip if same material already on this tile, or can't afford it
-          if (targetCell.material === selectedMaterial || budget < matData.cost) return;
-          setBudget(prev => prev - matData.cost);
+          if (targetCell.material === selectedMaterial || (mode === "BUDGET" && budget < matData.cost)) return;
+          if (mode === "BUDGET") setBudget(prev => prev - matData.cost);
           const newGrid = [...grid];
           for (let i = 0; i < newGrid.length; i++) {
             const c = newGrid[i];
@@ -1070,11 +1067,11 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
           setGrid(newGrid);
         } else if (activeTab === "BUILDINGS") {
           const bldgData = BUILDINGS[selectedBuilding];
-          if (!bldgData || budget < bldgData.cost) return;
+          if (!bldgData || (mode === "BUDGET" && budget < bldgData.cost)) return;
 
           if (selectedBuilding === "Bulldoze") {
             if (!cell.isBuilding) return; // Nothing to bulldoze
-            setBudget(prev => prev - bldgData.cost);
+            if (mode === "BUDGET") setBudget(prev => prev - bldgData.cost);
             const newGrid = [...grid];
             newGrid[cellIndex] = {
               ...cell,
@@ -1091,9 +1088,8 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
             setGrid(newGrid);
           } else {
             // Can't build on a building or water (unless we allow overwriting, but bulldozing first is safer)
-            if (cell.isBuilding || cell.material === "Water") return;
-
-            setBudget(prev => prev - bldgData.cost);
+            if (cell.isBuilding) return; // Can't build on existing building
+            if (mode === "BUDGET") setBudget(prev => prev - bldgData.cost);
             const rng = seededRng(hitCol * 1337 + hitRow * 7919 + 42 + Math.random() * 1000); 
             const modelPath = pickModel(bldgData.type, rng);
             
@@ -1172,7 +1168,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
       {/* ─── CENTER 3D CANVAS (BACKGROUND) ─── */}
       <div className="center-canvas">
         <Canvas camera={{ position: [70, 55, 70], fov: 45 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
-          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} huntLowest={huntLowest} huntState={huntState} />
+          <CityScene grid={grid} onGridClick={handleGridClick} showHeatMap={showHeatMap} cols={gridCols} rows={gridRows} huntLowest={huntLowest} huntState={huntState} />
         </Canvas>
       </div>
 
@@ -1181,7 +1177,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
         <button className="back-btn" onClick={onBack}>← TITLE SCREEN</button>
         <h2 className="panel-title">CONTROLS</h2>
         
-        {mapMode !== "HEAT_HUNT" && (
+        {mapMode === "CITY" && (
           <div className="mode-toggle">
             <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
             <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
@@ -1301,7 +1297,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
       </div>
 
       {/* ─── BOTTOM BUILD MENU ─── */}
-      {mode === "BUDGET" && (
+      {(mode === "BUDGET" || mode === "SANDBOX") && (
         <div className="hud-panel hud-bottom">
           <div className="mode-toggle vertical" style={{ marginRight: '16px', minWidth: '100px' }}>
             <button className={activeTab === "MATERIALS" ? "active" : ""} onClick={() => setActiveTab("MATERIALS")}>Materials</button>
@@ -1317,7 +1313,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
                   onClick={() => setSelectedMaterial(name)}
                 >
                   <span className="mat-name">{name}</span>
-                  <span className="mat-cost">${data.cost / 1000}k</span>
+                  <span className="mat-cost">{mode === "SANDBOX" ? "FREE" : `$${data.cost / 1000}k`}</span>
                   <div className="mat-stats">
                     <span>Albedo: {data.albedo}</span>
                     <span>Cooling: {data.cooling}°</span>
@@ -1335,7 +1331,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
                   onClick={() => setSelectedBuilding(name)}
                 >
                   <span className="mat-name">{name}</span>
-                  <span className="mat-cost">${data.cost / 1000}k</span>
+                  <span className="mat-cost">{mode === "SANDBOX" ? "FREE" : `$${data.cost / 1000}k`}</span>
                   {name !== "Bulldoze" && (
                     <div className="mat-stats">
                       <span>Height: +{data.heightBonus}</span>
@@ -1444,7 +1440,7 @@ export default function App() {
         onBack={() => setScreen("title")}
         onSimulationStart={(grid, rows, cols) => {
           setSimConfig({ grid, rows, cols });
-          setScreen("CITY");
+          setScreen("SANDBOX");
         }}
       />
     );
