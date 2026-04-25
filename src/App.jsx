@@ -93,7 +93,7 @@ function TitleScreen({ onEnter }) {
    ══════════════════════════════════════════════════════════════════════ */
 
 const MATERIALS = {
-  Asphalt: { albedo: 0.05, cooling: 0, cost: 0, color: "#222222" },
+  Asphalt: { albedo: 0.05, cooling: 0, cost: 1000, color: "#222222" },
   Concrete: { albedo: 0.30, cooling: 2, cost: 5000, color: "#888888" },
   "White Roof": { albedo: 0.70, cooling: 5, cost: 20000, color: "#ffffff" },
   Grass: { albedo: 0.25, cooling: 8, cost: 15000, color: "#3a9e40" },
@@ -232,10 +232,56 @@ function useInterval(callback, delay) {
    3D COMPONENTS
    ══════════════════════════════════════════════════════════════════════ */
 
-function KenneyBuilding({ modelPath, position, rotation, scale }) {
+function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial }) {
   const { scene } = useGLTF(modelPath);
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
-  return <primitive object={clonedScene} position={position} rotation={rotation} scale={scale} castShadow receiveShadow />;
+  
+  const { box, size, center, roofY } = useMemo(() => {
+    const b = new THREE.Box3().setFromObject(clonedScene);
+    const s = b.getSize(new THREE.Vector3());
+    const c = b.getCenter(new THREE.Vector3());
+    
+    // Raycast downwards to find the actual roof height, ignoring thin antennas in the middle
+    const raycaster = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    const offsets = [
+      [0.25, 0.25], [-0.25, 0.25], [0.25, -0.25], [-0.25, -0.25],
+      [0, 0.3], [0, -0.3], [0.3, 0], [-0.3, 0] // some additional edge points
+    ];
+    
+    let highestHitY = -Infinity;
+    
+    offsets.forEach(([dx, dz]) => {
+      const origin = new THREE.Vector3(c.x + s.x * dx, b.max.y + 0.1, c.z + s.z * dz);
+      raycaster.set(origin, down);
+      const intersects = raycaster.intersectObject(clonedScene, true);
+      if (intersects.length > 0) {
+        if (intersects[0].point.y > highestHitY) {
+          highestHitY = intersects[0].point.y;
+        }
+      }
+    });
+
+    const finalRoofY = highestHitY > -Infinity ? highestHitY : b.max.y;
+
+    return { box: b, size: s, center: c, roofY: finalRoofY };
+  }, [clonedScene]);
+
+  const showOverlay = appliedMaterial && appliedMaterial !== "Asphalt";
+  const overlayColor = showOverlay ? MATERIALS[appliedMaterial].color : "#ffffff";
+  const overlayThickness = 0.08;
+
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      <primitive object={clonedScene} castShadow receiveShadow />
+      {showOverlay && (
+        <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]} castShadow receiveShadow>
+          <boxGeometry args={[size.x * 0.9, overlayThickness, size.z * 0.9]} />
+          <meshStandardMaterial color={overlayColor} roughness={0.8} />
+        </mesh>
+      )}
+    </group>
+  );
 }
 
 function HeatMap({ grid }) {
@@ -357,6 +403,7 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
                 position={[c.cx, 0, c.cz]}
                 rotation={[0, c.rotY, 0]}
                 scale={[MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar, MODEL_SCALE * c.scaleVar]}
+                appliedMaterial={c.material}
               />
             );
           })}
