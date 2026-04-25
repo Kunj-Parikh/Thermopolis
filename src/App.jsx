@@ -4,10 +4,6 @@ import { OrbitControls, Sky } from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
 
-/* ══════════════════════════════════════════════════════════════════════
-   TITLE SCREEN
-   ══════════════════════════════════════════════════════════════════════ */
-
 function TitleParticles() {
   const count = 150;
   const meshRef = useRef();
@@ -83,6 +79,26 @@ function TitleScreen({ onEnter }) {
     </div>
   );
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   MATERIALS DATA
+   ══════════════════════════════════════════════════════════════════════ */
+const MATERIALS = {
+  asphalt: { name: "Asphalt", cost: 0, albedo: 0.05, etCooling: 0, thermalMass: "Very High", diffusionRadius: 0, color: "#2C2C2C", notes: "Starting material, worst heat" },
+  concrete: { name: "Concrete pavement", cost: 50, albedo: 0.30, etCooling: 0, thermalMass: "High", diffusionRadius: 0, color: "#A0A0A0", notes: "Cheap upgrade, minor help" },
+  gravel: { name: "Gravel / light pavement", cost: 80, albedo: 0.45, etCooling: 0, thermalMass: "Medium", diffusionRadius: 0, color: "#C8B89A", notes: "Decent albedo, no cooling" },
+  grass: { name: "Grass / lawn", cost: 120, albedo: 0.25, etCooling: 35, thermalMass: "Low", diffusionRadius: 1, color: "#7EC850", notes: "Moderate cooling, wide availability" },
+  greenRoof: { name: "Green roof", cost: 200, albedo: 0.30, etCooling: 50, thermalMass: "Low", diffusionRadius: 1, color: "#5A8C3C", notes: "Good ET, applied to buildings only" },
+  coolRoof: { name: "White / cool roof", cost: 150, albedo: 0.70, etCooling: 0, thermalMass: "Low", diffusionRadius: 0, color: "#F0F0F0", notes: "High albedo but zero ET — only helps that cell" },
+  reflectivePavement: { name: "Reflective pavement", cost: 180, albedo: 0.60, etCooling: 0, thermalMass: "Medium", diffusionRadius: 0, color: "#E8E0C8", notes: "Good reflection, no cooling radius" },
+  shrubs: { name: "Shrubs / hedgerow", cost: 160, albedo: 0.22, etCooling: 45, thermalMass: "Low", diffusionRadius: 1, color: "#4A7A28", notes: "Mid-tier, good value" },
+  smallTree: { name: "Small tree", cost: 250, albedo: 0.20, etCooling: 60, thermalMass: "Low", diffusionRadius: 1, color: "#3A6B20", notes: "Solid cooling radius" },
+  matureTree: { name: "Mature tree", cost: 400, albedo: 0.18, etCooling: 85, thermalMass: "Low", diffusionRadius: 2, color: "#2D5218", notes: "Best ET, wide radius, expensive" },
+  waterFeature: { name: "Water feature / pond", cost: 350, albedo: 0.10, etCooling: 90, thermalMass: "Very High", diffusionRadius: 2, color: "#4A90D9", notes: "Excellent ET but only if 2×2 or larger" },
+  wetland: { name: "Wetland / rain garden", cost: 300, albedo: 0.12, etCooling: 95, thermalMass: "Medium", diffusionRadius: 2, color: "#6B9E6B", notes: "Highest cooling but placement-dependent" },
+  permeablePavement: { name: "Permeable pavement", cost: 200, albedo: 0.40, etCooling: 20, thermalMass: "Low", diffusionRadius: 0, color: "#B8A882", notes: "Absorbs water, mild ET in wet conditions" },
+  solarPanels: { name: "Solar panels", cost: 300, albedo: 0.10, etCooling: 0, thermalMass: "Low", diffusionRadius: 0, color: "#1A1A4A", notes: "Low albedo (hot!) but earns back $50/turn" }
+};
 
 /* ══════════════════════════════════════════════════════════════════════
    NYC CITY DATA GENERATOR
@@ -171,19 +187,16 @@ function generateNYC() {
       const winEmissive = "#000000";  // no window glow in daylight
       const hasAntenna = zone !== "park" && height > 35 && rng() > 0.5;
       const hasWaterTower = height > 14 && rng() > 0.65;
+      const material = "asphalt";
 
-      blocks.push({ col, row, zone, height, tiers, cx, cz, color, windowEmissive: winEmissive, hasAntenna, hasWaterTower });
+      blocks.push({ col, row, zone, height, tiers, cx, cz, color, windowEmissive: winEmissive, hasAntenna, hasWaterTower, material });
     }
   }
   return blocks;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   3D SCENE COMPONENTS
-   ══════════════════════════════════════════════════════════════════════ */
-
-function NYCBuilding({ block }) {
-  const { cx, cz, zone, height, tiers, color, windowEmissive, hasAntenna, hasWaterTower } = block;
+function NYCBuilding({ block, onBuildingClick }) {
+  const { cx, cz, zone, height, tiers, color, windowEmissive, hasAntenna, hasWaterTower, material } = block;
   const [hovered, setHovered] = useState(false);
 
   if (zone === "park" || height === 0 || tiers.length === 0) return null;
@@ -197,23 +210,39 @@ function NYCBuilding({ block }) {
     const td = bd * tier.scale;
     const midY = yOffset + tier.h / 2;
     yOffset += tier.h;
+    const isTopTier = ti === tiers.length - 1;
+    
     return (
-      <mesh key={ti} position={[0, midY, 0]} castShadow receiveShadow>
-        <boxGeometry args={[tw, tier.h, td]} />
-        <meshStandardMaterial
-          color={hovered ? "#ffdd55" : color}
-          roughness={0.18}
-          metalness={0.45}
-        />
-      </mesh>
+      <group key={ti} position={[0, midY, 0]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[tw, tier.h, td]} />
+          <meshStandardMaterial
+            color={hovered ? "#ffdd55" : color}
+            roughness={0.18}
+            metalness={0.45}
+          />
+        </mesh>
+        {isTopTier && (
+          <mesh position={[0, tier.h / 2 + 0.05, 0]}>
+            <boxGeometry args={[tw - 0.2, 0.1, td - 0.2]} />
+            <meshStandardMaterial color={MATERIALS[material]?.color || "#2C2C2C"} roughness={0.8} />
+          </mesh>
+        )}
+      </group>
     );
   });
 
   return (
     <group
       position={[cx, 0, cz]}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
+      onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
+      onPointerOut={(e) => { setHovered(false); }}
+      onClick={(e) => {
+        if (onBuildingClick) {
+          e.stopPropagation();
+          onBuildingClick();
+        }
+      }}
     >
       {tierMeshes}
 
@@ -453,7 +482,7 @@ function SceneFog() {
    CITY VIEW
    ══════════════════════════════════════════════════════════════════════ */
 
-function CityScene({ blocks }) {
+function CityScene({ blocks, onBuildingClick }) {
   return (
     <>
       <SceneFog />
@@ -495,7 +524,7 @@ function CityScene({ blocks }) {
       <Ground />
       <Roads />
       <ParkArea />
-      {blocks.map((b, i) => <NYCBuilding key={i} block={b} />)}
+      {blocks.map((b, i) => <NYCBuilding key={i} block={b} onBuildingClick={() => onBuildingClick(i)} />)}
       <StreetLights />
 
       <OrbitControls
@@ -511,7 +540,16 @@ function CityScene({ blocks }) {
 }
 
 function CityView({ onBack }) {
-  const blocks = useMemo(() => generateNYC(), []);
+  const [blocks, setBlocks] = useState(() => generateNYC());
+  const [selectedMaterial, setSelectedMaterial] = useState("asphalt");
+
+  const handleBuildingClick = (index) => {
+    setBlocks(prev => {
+      const newBlocks = [...prev];
+      newBlocks[index] = { ...newBlocks[index], material: selectedMaterial };
+      return newBlocks;
+    });
+  };
 
   return (
     <div className="city-view">
@@ -526,6 +564,26 @@ function CityView({ onBack }) {
         </div>
       </div>
 
+      {/* Material Panel */}
+      <div className="material-panel">
+        <h3 className="panel-title">MATERIALS</h3>
+        <div className="material-list">
+          {Object.entries(MATERIALS).map(([key, mat]) => (
+            <div 
+              key={key} 
+              className={`material-item ${selectedMaterial === key ? 'selected' : ''}`}
+              onClick={() => setSelectedMaterial(key)}
+            >
+              <div className="material-color" style={{ background: mat.color }} />
+              <div className="material-info">
+                <div className="material-name">{mat.name} <span className="material-cost">${mat.cost}</span></div>
+                <div className="material-stats">Albedo: {mat.albedo} | ET: {mat.etCooling} W/m²</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Zone legend */}
       <div className="city-legend">
         <div className="legend-item"><span className="dot" style={{ background: "#b8ccd8" }} />Midtown</div>
@@ -535,22 +593,18 @@ function CityView({ onBack }) {
         <div className="legend-item"><span className="dot" style={{ background: "#8a8070" }} />Residential</div>
       </div>
 
-      {/* 3D Canvas */}
       <Canvas
         shadows
         camera={{ position: [100, 90, 100], fov: 42 }}
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
         gl={{ antialias: true }}
       >
-        <CityScene blocks={blocks} />
+        <CityScene blocks={blocks} onBuildingClick={handleBuildingClick} />
       </Canvas>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   APP ROOT
-   ══════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
   const [screen, setScreen] = useState("title");
