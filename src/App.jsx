@@ -280,7 +280,7 @@ function generateInitialGrid(mapMode) {
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const rng = seededRng(col * 1337 + row * 7919 + 42);
-      const zone = getZone(col, row);
+      let zone = getZone(col, row);
       const cx = (col - GRID_COLS / 2 + 0.5) * CELL;
       const cz = (row - GRID_ROWS / 2 + 0.5) * CELL;
       const rotY = Math.floor(rng() * 4) * (Math.PI / 2);
@@ -290,8 +290,12 @@ function generateInitialGrid(mapMode) {
       let isBuilding = false;
       let modelPath = null;
       let heightBonus = 0;
+      const isRural = row === 0 || row === GRID_ROWS - 1 || col === 0 || col === GRID_COLS - 1;
 
-      if (mapMode === "HEAT_HUNT") {
+      if (isRural) {
+        zone = "rural";
+        initialMaterial = "Grass";
+      } else if (mapMode === "HEAT_HUNT") {
         const matKeys = Object.keys(MATERIALS);
         initialMaterial = matKeys[Math.floor(rng() * matKeys.length)];
         isBuilding = rng() > 0.5;
@@ -315,6 +319,7 @@ function generateInitialGrid(mapMode) {
         baseTemp: BASE_TEMP,
         heightBonus,
         currentTemp: BASE_TEMP,
+        isRural,
         key: `${col}_${row}`
       });
     }
@@ -753,6 +758,8 @@ function CityView({ onBack, mapMode }) {
     if (hitCol >= 0 && hitCol < GRID_COLS && hitRow >= 0 && hitRow < GRID_ROWS) {
       const cellIndex = hitRow * GRID_COLS + hitCol;
       const cell = grid[cellIndex];
+      
+      if (cell.isRural) return;
 
       if (mode === "BUDGET") {
         if (activeTab === "MATERIALS") {
@@ -831,12 +838,21 @@ function CityView({ onBack, mapMode }) {
   };
 
   // Stats computation
-  const avgTemp = grid.reduce((acc, c) => acc + c.currentTemp, 0) / grid.length;
-  const sortedByTemp = [...grid].sort((a, b) => b.currentTemp - a.currentTemp);
-  const hottest = sortedByTemp[0];
-  const coolest = sortedByTemp[sortedByTemp.length - 1];
+  const ruralCells = grid.filter(c => c.isRural);
+  const innerCells = grid.filter(c => !c.isRural);
+  
+  const avgRuralTemp = ruralCells.reduce((acc, c) => acc + c.currentTemp, 0) / (ruralCells.length || 1);
+  const avgInnerTemp = innerCells.reduce((acc, c) => acc + c.currentTemp, 0) / (innerCells.length || 1);
+  const uhii = avgInnerTemp - avgRuralTemp;
+  
+  let uhiiRating = { text: "Excellent 🟢", color: "#00ffc8" };
+  if (uhii > 5.0) uhiiRating = { text: "Extreme 🚨", color: "#ff0000" };
+  else if (uhii > 3.5) uhiiRating = { text: "Severe 🔴", color: "#ff4060" };
+  else if (uhii > 2.0) uhiiRating = { text: "Concerning 🟠", color: "#ffaa20" };
+  else if (uhii > 1.0) uhiiRating = { text: "Good 🟡", color: "#ffeb3b" };
 
   const materialCounts = grid.reduce((acc, c) => {
+    if (c.isRural) return acc; // Only count inner city materials
     acc[c.material] = (acc[c.material] || 0) + 1;
     return acc;
   }, {});
@@ -927,23 +943,12 @@ function CityView({ onBack, mapMode }) {
         <h2 className="panel-title">LIVE STATS</h2>
         
         <div className="stat-box">
-          <h4>Avg City Temp</h4>
-          <div className="value" style={{ color: avgTemp > 35 ? "#ff4060" : "#00ffc8" }}>
-            {avgTemp.toFixed(1)} °C
+          <h4>Heat Island Intensity</h4>
+          <div className="value" style={{ color: uhiiRating.color }}>
+            +{Math.max(0, uhii).toFixed(1)}°C
           </div>
-        </div>
-
-        <div className="stat-box">
-          <h4>Hottest Block</h4>
-          <div className="value" style={{ color: "#ff4060", fontSize: "18px" }}>
-            {hottest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#888"}}>({hottest.zone})</span>
-          </div>
-        </div>
-
-        <div className="stat-box">
-          <h4>Coolest Block</h4>
-          <div className="value" style={{ color: "#00aaff", fontSize: "18px" }}>
-            {coolest.currentTemp.toFixed(1)}°C <span style={{fontSize: "12px", color: "#888"}}>({coolest.zone})</span>
+          <div style={{ fontSize: '13px', color: uhiiRating.color, marginTop: '4px', fontWeight: 'bold' }}>
+            {uhiiRating.text}
           </div>
         </div>
 
