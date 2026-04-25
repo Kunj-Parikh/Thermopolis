@@ -1,32 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
 import "./App.css";
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ color: 'red', padding: '20px', background: '#111', height: '100vh', overflow: 'auto' }}>
-          <h2>Application Crashed</h2>
-          <pre>{this.state.error?.stack || this.state.error?.toString()}</pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /* ══════════════════════════════════════════════════════════════════════
    TITLE SCREEN
@@ -36,14 +15,15 @@ function TitleParticles() {
   const count = 150;
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const data = useMemo(() =>
+  const [data] = useState(() =>
     Array.from({ length: count }, () => ({
       x: (Math.random() - 0.5) * 28,
       y: Math.random() * 16 - 3,
       z: (Math.random() - 0.5) * 28,
       speed: 0.15 + Math.random() * 0.5,
       scale: 0.03 + Math.random() * 0.08,
-    })), []);
+    }))
+  );
 
   useEffect(() => {
     data.forEach((d, i) => {
@@ -330,20 +310,12 @@ function LoadingFallback() {
    CITY VIEW - MAIN APP
    ══════════════════════════════════════════════════════════════════════ */
 
-// Daytime haze
-function SceneFog() {
-  const { scene } = useThree();
-  useEffect(() => {
-    scene.fog = new THREE.FogExp2("#c8ddf0", 0.004);
-    return () => { scene.fog = null; };
-  }, [scene]);
-  return null;
-}
+// SceneFog replaced by <fogExp2 /> in CityScene
 
 function CityScene({ grid, onGridClick }) {
   return (
     <>
-      <SceneFog />
+      <fogExp2 attach="fog" args={["#c8ddf0", 0.004]} />
       <color attach="background" args={["#87ceeb"]} />
       <Sky distance={4500} sunPosition={[100, 40, -80]} inclination={0.52} azimuth={0.22} turbidity={6} rayleigh={0.8} />
       <ambientLight intensity={0.75} color="#fff4e0" />
