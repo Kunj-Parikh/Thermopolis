@@ -468,7 +468,6 @@ function CityView({ onBack }) {
     acc[c.material] = (acc[c.material] || 0) + 1;
     return acc;
   }, {});
-  const blocks = useMemo(() => generateNYC(), []);
   const { user, logOut: handleLogOut } = useAuth();
   const [showBoard, setShowBoard] = useState(false);
 
@@ -595,27 +594,8 @@ function CityView({ onBack }) {
         )}
       </div>
 
-      {/* Zone legend */}
-      <div className="city-legend">
-        <div className="legend-item"><span className="dot" style={{ background: "#b8ccd8" }} />Midtown</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#bcc8d0" }} />Financial District</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#1d5c25" }} />Central Park</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#8890a0" }} />Mixed Use</div>
-        <div className="legend-item"><span className="dot" style={{ background: "#8a8070" }} />Residential</div>
-      </div>
-
       {/* Scoreboard overlay */}
       <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
-
-      {/* 3D Canvas */}
-      <Canvas
-        shadows
-        camera={{ position: [100, 90, 100], fov: 42 }}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-        gl={{ antialias: true }}
-      >
-        <CityScene blocks={blocks} />
-      </Canvas>
     </div>
   );
 }
