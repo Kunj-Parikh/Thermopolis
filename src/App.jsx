@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
+import WheelSpinner from "./components/WheelSpinner";
 import "./App.css";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -77,7 +78,10 @@ function TitleScreen({ onEnter }) {
       <div className="title-overlay">
         <h1 className="title-logo">THERMOPOLIS</h1>
         <p className="title-tagline">Every surface choice has a measurable temperature consequence.</p>
-        <button className="enter-btn" onClick={onEnter}>ENTER CITY</button>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <button className="enter-btn" onClick={() => onEnter("CITY")}>ENTER CITY</button>
+          <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
+        </div>
         <div className="title-badges">
           <span>React</span>
           <span>Three.js r{THREE.REVISION}</span>
@@ -99,7 +103,100 @@ const MATERIALS = {
   Grass: { albedo: 0.25, cooling: 8, cost: 15000, color: "#3a9e40" },
   Water: { albedo: 0.10, cooling: 8, cost: 25000, color: "#2a7aaa" },
   "Tree Canopy": { albedo: 0.20, cooling: 12, cost: 30000, color: "#2d6b31" },
+  "Solar Panels": { albedo: 0.15, cooling: 4, cost: 40000, color: "#1a2c4d", income: 500 },
+  "Brick": { albedo: 0.20, cooling: -2, cost: 3000, color: "#b24c3b" },
+  "Permeable Pavement": { albedo: 0.25, cooling: 6, cost: 10000, color: "#9ca5b5" },
+  "Sand": { albedo: 0.40, cooling: 2, cost: 5000, color: "#e3c68a" },
+  "Green Wall": { albedo: 0.35, cooling: 20, cost: 75000, color: "#1b4d24" },
+  "Cool Coating": { albedo: 0.95, cooling: 10, cost: 35000, color: "#f0f8ff" },
 };
+
+const BUILDINGS = {
+  Bulldoze: { cost: 5000, type: "clear", heightBonus: 0 },
+  "Small Building": { cost: 50000, type: "residential", heightBonus: 1 },
+  "Large Building": { cost: 150000, type: "downtown", heightBonus: 2 },
+  "Skyscraper": { cost: 500000, type: "financial", heightBonus: 4 },
+};
+
+const TEXTURE_CACHE = {};
+
+function createTexture(type) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  
+  // Base color
+  const color = MATERIALS[type]?.color || '#ffffff';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 256, 256);
+  
+  if (type === 'Solar Panels') {
+    ctx.strokeStyle = 'rgba(200, 220, 255, 0.5)';
+    ctx.lineWidth = 3;
+    for(let x=0; x<=256; x+=32) {
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,256); ctx.stroke();
+    }
+    for(let y=0; y<=256; y+=64) {
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(256,y); ctx.stroke();
+    }
+    // Glare
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath(); ctx.moveTo(0,256); ctx.lineTo(256,0); ctx.lineTo(256,64); ctx.lineTo(64,256); ctx.fill();
+  } else if (type === 'Brick') {
+    ctx.fillStyle = '#cccccc'; // mortar
+    for(let y=0; y<256; y+=32) {
+      ctx.fillRect(0, y, 256, 4); // horizontal
+      const offset = (y/32)%2 === 0 ? 0 : 32;
+      for(let x=0; x<256; x+=64) {
+        ctx.fillRect(x + offset, y, 4, 32); // vertical
+      }
+    }
+  } else if (type === 'Grass' || type === 'Tree Canopy') {
+    for(let i=0; i<800; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.15})`;
+      ctx.beginPath();
+      ctx.arc(Math.random()*256, Math.random()*256, type === 'Grass' ? 2 : 5, 0, Math.PI*2);
+      ctx.fill();
+    }
+  } else if (type === 'Permeable Pavement') {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    for(let y=8; y<256; y+=16) {
+      for(let x=8; x<256; x+=16) {
+        ctx.beginPath(); ctx.arc(x,y, 4, 0, Math.PI*2); ctx.fill();
+      }
+    }
+  } else if (type === 'Cool Coating') {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.fillRect(0, 0, 256, 256);
+  } else if (type === 'Green Wall') {
+    for(let i=0; i<400; i++) {
+      ctx.fillStyle = `rgba(27,77,36,${Math.random()*0.4+0.6})`;
+      ctx.fillRect(Math.random()*256, Math.random()*256, 16, 8);
+    }
+  } else {
+    // Asphalt, Concrete, Sand (noise)
+    for(let i=0; i<3000; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.1})`;
+      ctx.fillRect(Math.random()*256, Math.random()*256, 2, 2);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function getMaterialTexture(type) {
+  if (!type || type === "Water" || type === "Bulldoze") return null;
+  if (!TEXTURE_CACHE[type]) {
+    TEXTURE_CACHE[type] = createTexture(type);
+  }
+  return TEXTURE_CACHE[type];
+}
 
 const BASE_TEMP = 25; // °C
 const SOLAR_CONSTANT = 18; // Max temp addition from sun
@@ -181,7 +278,7 @@ function pickModel(zone, rng) {
   }
 }
 
-function generateInitialGrid() {
+function generateInitialGrid(mapMode) {
   const grid = [];
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
@@ -193,15 +290,19 @@ function generateInitialGrid() {
       const scaleVar = 0.85 + rng() * 0.35;
       
       let initialMaterial = "Asphalt";
-      if (zone === "park") initialMaterial = "Grass";
-
-      const isBuilding = zone !== "park";
-      const modelPath = isBuilding ? pickModel(zone, rng) : null;
-      
+      let isBuilding = false;
+      let modelPath = null;
       let heightBonus = 0;
-      if (modelPath?.includes("skyscraper")) heightBonus = 4;
-      else if (modelPath?.includes("building-")) heightBonus = 2;
-      else if (isBuilding) heightBonus = 1;
+
+      if (mapMode !== "SANDBOX") {
+        if (zone === "park") initialMaterial = "Grass";
+        isBuilding = zone !== "park";
+        modelPath = isBuilding ? pickModel(zone, rng) : null;
+        
+        if (modelPath?.includes("skyscraper")) heightBonus = 4;
+        else if (modelPath?.includes("building-")) heightBonus = 2;
+        else if (isBuilding) heightBonus = 1;
+      }
 
       grid.push({
         col, row, zone, cx, cz, rotY, scaleVar, modelPath, isBuilding,
@@ -228,9 +329,133 @@ function useInterval(callback, delay) {
   }, [delay]);
 }
 
+function KeyboardPanControls() {
+  const { camera } = useThree();
+  const keys = useRef({ w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false });
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (keys.current.hasOwnProperty(e.key)) keys.current[e.key] = true;
+    };
+    const handleKeyUp = (e) => {
+      if (keys.current.hasOwnProperty(e.key)) keys.current[e.key] = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useFrame((state, delta) => {
+    let moveX = 0;
+    let moveZ = 0;
+    const k = keys.current;
+    
+    // moveZ is the multiplier for the forward vector
+    if (k.w || k.ArrowUp) moveZ += 1;
+    if (k.s || k.ArrowDown) moveZ -= 1;
+    if (k.a || k.ArrowLeft) moveX -= 1;
+    if (k.d || k.ArrowRight) moveX += 1;
+
+    if (moveX !== 0 || moveZ !== 0) {
+      const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+      moveX /= length;
+      moveZ /= length;
+      
+      const speed = 60 * delta; // 60 units per second
+      
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      forward.y = 0;
+      forward.normalize();
+      
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      right.y = 0;
+      right.normalize();
+
+      const dx = (right.x * moveX + forward.x * moveZ) * speed;
+      const dz = (right.z * moveX + forward.z * moveZ) * speed;
+
+      camera.position.x += dx;
+      camera.position.z += dz;
+
+      if (state.controls && state.controls.target) {
+        state.controls.target.x += dx;
+        state.controls.target.z += dz;
+      }
+    }
+  });
+
+  return null;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    3D COMPONENTS
    ══════════════════════════════════════════════════════════════════════ */
+
+function AnimatedWater({ cx, cz }) {
+  const materialRef = useRef();
+  const uniforms = useMemo(() => ({
+    time: { value: 0 },
+    baseColor: { value: new THREE.Color("#2a7aaa") }
+  }), []);
+  
+  useFrame((state) => {
+    if (materialRef.current) materialRef.current.uniforms.time.value = state.clock.elapsedTime;
+  });
+  
+  return (
+    <mesh position={[cx, 0.1, cz]} receiveShadow>
+      <boxGeometry args={[CELL, 0.2, CELL, 16, 1, 16]} />
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={uniforms}
+        vertexShader={`
+          varying vec2 vUv;
+          varying float vWave;
+          uniform float time;
+          void main() {
+            vUv = uv;
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            
+            // Overlapping waves for a more chaotic, liquid look
+            float wave1 = sin(worldPos.x * 2.0 + time * 1.2) * cos(worldPos.z * 1.5 + time * 1.0) * 0.08;
+            float wave2 = sin(worldPos.x * -1.0 + time * 0.8) * cos(worldPos.z * 2.5 - time * 0.6) * 0.05;
+            float wave3 = sin(worldPos.x * 3.0 - time * 1.5) * sin(worldPos.z * 1.0 + time * 1.2) * 0.03;
+            float totalWave = wave1 + wave2 + wave3;
+
+            vec3 pos = position;
+            pos.y += totalWave;
+            vWave = totalWave;
+
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+          }
+        `}
+        fragmentShader={`
+          varying vec2 vUv;
+          varying float vWave;
+          uniform vec3 baseColor;
+          void main() {
+            // Normalize wave height roughly to 0.0 - 1.0
+            float intensity = clamp((vWave + 0.13) / 0.26, 0.0, 1.0);
+            
+            // Mix between a deep water color and a light tropical cyan based on height
+            vec3 deepColor = vec3(0.0, 0.3, 0.7);
+            vec3 shallowColor = vec3(0.0, 0.8, 0.9);
+            vec3 waterColor = mix(deepColor, shallowColor, intensity);
+            
+            // Add a specular-like bright highlight to the peaks
+            float highlight = pow(intensity, 4.0) * 0.4;
+            
+            gl_FragColor = vec4(waterColor + vec3(highlight), 0.85);
+          }
+        `}
+        transparent
+      />
+    </mesh>
+  );
+}
 
 function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial }) {
   const { scene } = useGLTF(modelPath);
@@ -277,7 +502,7 @@ function KenneyBuilding({ modelPath, position, rotation, scale, appliedMaterial 
       {showOverlay && (
         <mesh position={[center.x, roofY + overlayThickness / 2 + 0.01, center.z]} castShadow receiveShadow>
           <boxGeometry args={[size.x * 0.9, overlayThickness, size.z * 0.9]} />
-          <meshStandardMaterial color={overlayColor} roughness={0.8} />
+          <meshStandardMaterial color={overlayColor} map={getMaterialTexture(appliedMaterial)} roughness={0.8} />
         </mesh>
       )}
     </group>
@@ -388,11 +613,15 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
         <group>
           {grid.map(c => {
             if (!c.isBuilding) {
+              if (c.material === "Water") {
+                return <AnimatedWater key={c.key} cx={c.cx} cz={c.cz} />;
+              }
               const matColor = MATERIALS[c.material].color;
+              const tex = getMaterialTexture(c.material);
               return (
                 <mesh key={c.key} position={[c.cx, 0.1, c.cz]} receiveShadow>
                   <boxGeometry args={[CELL-0.5, 0.2, CELL-0.5]} />
-                  <meshStandardMaterial color={matColor} roughness={0.9} />
+                  <meshStandardMaterial color={matColor} map={tex} roughness={0.9} />
                 </mesh>
               );
             }
@@ -410,22 +639,35 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
         </group>
       </Suspense>
 
-      <OrbitControls enableDamping dampingFactor={0.07} minDistance={8} maxDistance={320} maxPolarAngle={Math.PI / 2.05} target={[0, 5, 0]} listenToKeyEvents={window} keyPanSpeed={15} />
+      <KeyboardPanControls />
+      <OrbitControls 
+        makeDefault
+        enableDamping 
+        dampingFactor={0.07} 
+        minDistance={8} 
+        maxDistance={320} 
+        maxPolarAngle={Math.PI / 2.05} 
+        target={[0, 5, 0]} 
+      />
     </>
   );
 }
 
-function CityView({ onBack }) {
-  const [grid, setGrid] = useState(generateInitialGrid);
-  const [budget, setBudget] = useState(2000000); // $2M starting budget
+function CityView({ onBack, mapMode }) {
+  const [grid, setGrid] = useState(() => generateInitialGrid(mapMode));
+  const [budget, setBudget] = useState(200000000000000); // $2M starting budget
   const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
+  const [activeTab, setActiveTab] = useState("MATERIALS"); // "MATERIALS" or "BUILDINGS"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
+  const [selectedBuilding, setSelectedBuilding] = useState("Small Building");
   const [sensorLog, setSensorLog] = useState([]);
   const [showHeatMap, setShowHeatMap] = useState(false);
+  const [showSpinner, setShowSpinner] = useState(false);
 
   // Heat Simulation Loop (runs every 1 second)
   useInterval(() => {
     let currentGrid = grid.map(c => ({...c}));
+    let totalIncome = 0;
     
     // 1. Calculate local target equilibrium for each cell
     for (let i = 0; i < currentGrid.length; i++) {
@@ -434,6 +676,14 @@ function CityView({ onBack }) {
       const targetTemp = c.baseTemp + (1 - mat.albedo) * SOLAR_CONSTANT - mat.cooling + c.heightBonus;
       // Move current slowly towards target
       c.currentTemp += (targetTemp - c.currentTemp) * 0.15;
+      
+      if (mat.income && mode === "BUDGET") {
+        totalIncome += mat.income;
+      }
+    }
+
+    if (totalIncome > 0) {
+      setBudget(prev => prev + totalIncome);
     }
 
     // 2. Perform 15 Diffusion Passes
@@ -469,17 +719,55 @@ function CityView({ onBack }) {
       const cell = grid[cellIndex];
 
       if (mode === "BUDGET") {
-        const matData = MATERIALS[selectedMaterial];
-        // Skip if same material already on this tile, or can't afford it
-        if (cell.material === selectedMaterial || budget < matData.cost) return;
-        setBudget(prev => prev - matData.cost);
-        const newGrid = [...grid];
-        newGrid[cellIndex] = {
-          ...cell,
-          material: selectedMaterial,
-          currentTemp: cell.baseTemp, // reset heat before applying new material
-        };
-        setGrid(newGrid);
+        if (activeTab === "MATERIALS") {
+          const matData = MATERIALS[selectedMaterial];
+          // Skip if same material already on this tile, or can't afford it
+          if (cell.material === selectedMaterial || budget < matData.cost) return;
+          setBudget(prev => prev - matData.cost);
+          const newGrid = [...grid];
+          newGrid[cellIndex] = {
+            ...cell,
+            material: selectedMaterial,
+            currentTemp: cell.baseTemp, // reset heat before applying new material
+          };
+          setGrid(newGrid);
+        } else if (activeTab === "BUILDINGS") {
+          const bldgData = BUILDINGS[selectedBuilding];
+          if (!bldgData || budget < bldgData.cost) return;
+
+          if (selectedBuilding === "Bulldoze") {
+            if (!cell.isBuilding) return; // Nothing to bulldoze
+            setBudget(prev => prev - bldgData.cost);
+            const newGrid = [...grid];
+            newGrid[cellIndex] = {
+              ...cell,
+              isBuilding: false,
+              modelPath: null,
+              material: "Asphalt",
+              heightBonus: 0,
+              currentTemp: cell.baseTemp,
+            };
+            setGrid(newGrid);
+          } else {
+            // Can't build on a building or water (unless we allow overwriting, but bulldozing first is safer)
+            if (cell.isBuilding || cell.material === "Water") return;
+
+            setBudget(prev => prev - bldgData.cost);
+            const rng = seededRng(hitCol * 1337 + hitRow * 7919 + 42 + Math.random() * 1000); 
+            const modelPath = pickModel(bldgData.type, rng);
+            
+            const newGrid = [...grid];
+            newGrid[cellIndex] = {
+              ...cell,
+              isBuilding: true,
+              modelPath: modelPath,
+              heightBonus: bldgData.heightBonus,
+              material: "Asphalt", // default roof
+              currentTemp: cell.baseTemp,
+            };
+            setGrid(newGrid);
+          }
+        }
       } else if (mode === "HEAT_HUNT") {
         setSensorLog(prev => [
           { time: new Date().toLocaleTimeString(), loc: `${hitCol},${hitRow}`, temp: cell.currentTemp.toFixed(1) },
@@ -519,27 +807,68 @@ function CityView({ onBack }) {
             <div className="budget-display">
               <h4>REMAINING BUDGET</h4>
               <div className="budget-val">${budget.toLocaleString()}</div>
+              <button 
+                className="spin-btn-small" 
+                onClick={() => setShowSpinner(true)}
+                style={{
+                  marginTop: '10px', width: '100%', padding: '8px', 
+                  background: 'linear-gradient(135deg, #ff4060, #ffaa20)',
+                  color: '#fff', border: 'none', borderRadius: '4px',
+                  fontFamily: 'Orbitron', fontWeight: 'bold', cursor: 'pointer',
+                  letterSpacing: '1px', boxShadow: '0 0 10px rgba(255, 64, 96, 0.4)'
+                }}
+              >
+                🎰 SPIN FOR FUNDS
+              </button>
             </div>
             
-            <h4>SURFACE MATERIALS</h4>
-            <div className="materials-list">
-              {Object.entries(MATERIALS).map(([name, data]) => (
-                <div 
-                  key={name} 
-                  className={`material-card ${selectedMaterial === name ? "active" : ""}`}
-                  onClick={() => setSelectedMaterial(name)}
-                >
-                  <div className="mat-header">
-                    <span className="mat-name">{name}</span>
-                    <span className="mat-cost">${data.cost / 1000}k</span>
-                  </div>
-                  <div className="mat-stats">
-                    <span>Albedo: {data.albedo}</span>
-                    <span>Cooling: {data.cooling}°</span>
-                  </div>
-                </div>
-              ))}
+            <div className="mode-toggle" style={{marginTop: '16px', marginBottom: '8px'}}>
+              <button className={activeTab === "MATERIALS" ? "active" : ""} onClick={() => setActiveTab("MATERIALS")}>Materials</button>
+              <button className={activeTab === "BUILDINGS" ? "active" : ""} onClick={() => setActiveTab("BUILDINGS")}>Buildings</button>
             </div>
+
+            {activeTab === "MATERIALS" ? (
+              <div className="materials-list">
+                {Object.entries(MATERIALS).map(([name, data]) => (
+                  <div 
+                    key={name} 
+                    className={`material-card ${selectedMaterial === name ? "active" : ""}`}
+                    onClick={() => setSelectedMaterial(name)}
+                  >
+                    <div className="mat-header">
+                      <span className="mat-name">{name}</span>
+                      <span className="mat-cost">${data.cost / 1000}k</span>
+                    </div>
+                    <div className="mat-stats">
+                      <span>Albedo: {data.albedo}</span>
+                      <span>Cooling: {data.cooling}°</span>
+                      {data.income && <span style={{color: '#00ffc8'}}>Income: +${data.income}/s</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="materials-list">
+                {Object.entries(BUILDINGS).map(([name, data]) => (
+                  <div 
+                    key={name} 
+                    className={`material-card ${selectedBuilding === name ? "active" : ""}`}
+                    onClick={() => setSelectedBuilding(name)}
+                  >
+                    <div className="mat-header">
+                      <span className="mat-name">{name}</span>
+                      <span className="mat-cost">${data.cost / 1000}k</span>
+                    </div>
+                    {name !== "Bulldoze" && (
+                      <div className="mat-stats">
+                        <span>Height Bonus: +{data.heightBonus}°</span>
+                        <span>Type: {data.type}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -634,6 +963,13 @@ function CityView({ onBack }) {
 
       {/* Scoreboard overlay */}
       <Scoreboard visible={showBoard} onClose={() => setShowBoard(false)} />
+      
+      {/* Funding Wheel overlay */}
+      <WheelSpinner 
+        visible={showSpinner} 
+        onClose={() => setShowSpinner(false)} 
+        onWin={(amount) => setBudget(b => b + amount)} 
+      />
     </div>
   );
 }
@@ -655,7 +991,7 @@ export default function App() {
   if (!user) return <LoginScreen />;
 
   // Signed in → normal flow
-  if (screen === "city") return <CityView onBack={() => setScreen("title")} />;
-  return <TitleScreen onEnter={() => setScreen("city")} />;
+  if (screen === "CITY" || screen === "SANDBOX") return <CityView mapMode={screen} onBack={() => setScreen("title")} />;
+  return <TitleScreen onEnter={(mode) => setScreen(mode)} />;
 }
 
