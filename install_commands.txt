@@ -8,11 +8,11 @@ Step 1: Create the React app with Vite in this directory
 Step 2: Install base dependencies
   npm install
 
-Step 3: Install Three.js (r128 pinned)
-  npm install three@0.128.0
+Step 3: Install Three.js
+  npm install three
 
 Step 4: Install React-Three integration (for raycasting, camera controls, etc.)
-  npm install @react-three/fiber@8 @react-three/drei@9
+  npm install @react-three/fiber @react-three/drei
 
 Step 5: Install Firebase
   npm install firebase
