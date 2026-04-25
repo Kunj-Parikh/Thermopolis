@@ -92,10 +92,6 @@ function TitleScreen({ onEnter }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   GAME CONSTANTS & SURFACE SCIENCE DATA
-   ══════════════════════════════════════════════════════════════════════ */
-
 const MATERIALS = {
   Asphalt: { albedo: 0.05, cooling: 0, cost: 1000, color: "#222222" },
   Concrete: { albedo: 0.30, cooling: 2, cost: 5000, color: "#888888" },
@@ -201,7 +197,6 @@ function getMaterialTexture(type) {
 const BASE_TEMP = 25; // °C
 const SOLAR_CONSTANT = 18; // Max temp addition from sun
 
-// Kenney City Kit Models
 const SKYSCRAPER_MODELS = [
   "/models/building-skyscraper-a.glb", "/models/building-skyscraper-b.glb",
   "/models/building-skyscraper-c.glb", "/models/building-skyscraper-d.glb",
