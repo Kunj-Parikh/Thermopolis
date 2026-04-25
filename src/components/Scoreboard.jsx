@@ -25,7 +25,7 @@ export default function Scoreboard({ visible, onClose }) {
       <div className="scoreboard-panel" onClick={(e) => e.stopPropagation()}>
         <div className="scoreboard-header">
           <div className="scoreboard-header-left">
-            <span className="scoreboard-icon">🏆</span>
+            <span className="scoreboard-icon"></span>
             <h2 className="scoreboard-title">LEADERBOARD</h2>
           </div>
           <button className="scoreboard-close" onClick={onClose}>✕</button>
@@ -61,7 +61,7 @@ export default function Scoreboard({ visible, onClose }) {
                     : "—";
                   return (
                     <tr key={s.id} className={`scoreboard-row ${isMe ? "row-me" : ""}`} style={{ animationDelay: `${i * 0.05}s` }}>
-                      <td>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
+                      <td>{i + 1}</td>
                       <td>
                         {s.playerName || s.userId?.slice(0, 8) || "Anon"}
                         {isMe && <span className="you-badge">YOU</span>}
