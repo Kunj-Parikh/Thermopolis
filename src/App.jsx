@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "./contexts/AuthContext";
+import { saveScore } from "./firebase";
 import LoginScreen from "./components/LoginScreen";
 import Scoreboard from "./components/Scoreboard";
 import WheelSpinner from "./components/WheelSpinner";
@@ -81,6 +82,7 @@ function TitleScreen({ onEnter }) {
         <div style={{ display: 'flex', gap: '16px' }}>
           <button className="enter-btn" onClick={() => onEnter("CITY")}>ENTER CITY</button>
           <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
+          <button className="enter-btn" style={{ background: 'linear-gradient(135deg, #ffaa20, #ff4060)' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
         </div>
         <div className="title-badges">
           <span>React</span>
@@ -289,7 +291,15 @@ function generateInitialGrid(mapMode) {
       let modelPath = null;
       let heightBonus = 0;
 
-      if (mapMode !== "SANDBOX") {
+      if (mapMode === "HEAT_HUNT") {
+        const matKeys = Object.keys(MATERIALS);
+        initialMaterial = matKeys[Math.floor(rng() * matKeys.length)];
+        isBuilding = rng() > 0.5;
+        modelPath = isBuilding ? pickModel("mixed", rng) : null;
+        if (modelPath?.includes("skyscraper")) heightBonus = 4;
+        else if (modelPath?.includes("building-")) heightBonus = 2;
+        else if (isBuilding) heightBonus = 1;
+      } else if (mapMode !== "SANDBOX") {
         if (zone === "park") initialMaterial = "Grass";
         isBuilding = zone !== "park";
         modelPath = isBuilding ? pickModel(zone, rng) : null;
@@ -402,7 +412,7 @@ function AnimatedWater({ cx, cz }) {
   
   return (
     <mesh position={[cx, 0.1, cz]} receiveShadow>
-      <boxGeometry args={[CELL, 0.2, CELL, 16, 1, 16]} />
+      <boxGeometry args={[CELL, 0.2, CELL, 32, 1, 32]} />
       <shaderMaterial
         ref={materialRef}
         uniforms={uniforms}
@@ -414,11 +424,15 @@ function AnimatedWater({ cx, cz }) {
             vUv = uv;
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             
-            // Overlapping waves for a more chaotic, liquid look
-            float wave1 = sin(worldPos.x * 2.0 + time * 1.2) * cos(worldPos.z * 1.5 + time * 1.0) * 0.08;
-            float wave2 = sin(worldPos.x * -1.0 + time * 0.8) * cos(worldPos.z * 2.5 - time * 0.6) * 0.05;
-            float wave3 = sin(worldPos.x * 3.0 - time * 1.5) * sin(worldPos.z * 1.0 + time * 1.2) * 0.03;
-            float totalWave = wave1 + wave2 + wave3;
+            // Complex overlapping waves for a highly randomized, natural interference pattern
+            float wave1 = sin(worldPos.x * 0.83 + time * 1.2) * cos(worldPos.z * 1.17 + time * 0.9) * 0.12;
+            float wave2 = sin(worldPos.x * -1.41 + time * 0.8) * cos(worldPos.z * 1.73 - time * 0.6) * 0.08;
+            float wave3 = sin(worldPos.x * 2.37 - time * 1.5) * sin(worldPos.z * -0.91 + time * 1.1) * 0.06;
+            
+            // Large, slow sweeping wave to break up small repeating tile patterns across the map
+            float wave4 = sin(worldPos.x * 0.31 + worldPos.z * 0.47 + time * 0.4) * 0.07;
+            
+            float totalWave = wave1 + wave2 + wave3 + wave4;
 
             vec3 pos = position;
             pos.y += totalWave;
@@ -433,17 +447,18 @@ function AnimatedWater({ cx, cz }) {
           uniform vec3 baseColor;
           void main() {
             // Normalize wave height roughly to 0.0 - 1.0
-            float intensity = clamp((vWave + 0.13) / 0.26, 0.0, 1.0);
+            float intensity = clamp((vWave + 0.3) / 0.6, 0.0, 1.0);
             
-            // Mix between a deep water color and a light tropical cyan based on height
-            vec3 deepColor = vec3(0.0, 0.3, 0.7);
-            vec3 shallowColor = vec3(0.0, 0.8, 0.9);
-            vec3 waterColor = mix(deepColor, shallowColor, intensity);
+            // Sharper color transitions to avoid blurriness
+            vec3 deepColor = vec3(0.0, 0.2, 0.5);   // Rich, darker navy
+            vec3 shallowColor = vec3(0.0, 0.5, 0.7); // Softer ocean blue
+            vec3 waterColor = mix(deepColor, shallowColor, smoothstep(0.4, 0.65, intensity));
             
-            // Add a specular-like bright highlight to the peaks
-            float highlight = pow(intensity, 4.0) * 0.4;
+            // Crisp foam highlights at the very peaks, toned down
+            float foam = smoothstep(0.75, 0.9, intensity);
+            waterColor += vec3(foam * 0.4);
             
-            gl_FragColor = vec4(waterColor + vec3(highlight), 0.85);
+            gl_FragColor = vec4(waterColor, 0.9);
           }
         `}
         transparent
@@ -611,11 +626,32 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
               if (c.material === "Water") {
                 return <AnimatedWater key={c.key} cx={c.cx} cz={c.cz} />;
               }
+              
+              const leftCell = c.col > 0 ? grid[c.row * GRID_COLS + c.col - 1] : null;
+              const rightCell = c.col < GRID_COLS - 1 ? grid[c.row * GRID_COLS + c.col + 1] : null;
+              const topCell = c.row > 0 ? grid[(c.row - 1) * GRID_COLS + c.col] : null;
+              const bottomCell = c.row < GRID_ROWS - 1 ? grid[(c.row + 1) * GRID_COLS + c.col] : null;
+
+              const sameLeft = leftCell && !leftCell.isBuilding && leftCell.material === c.material;
+              const sameRight = rightCell && !rightCell.isBuilding && rightCell.material === c.material;
+              const sameTop = topCell && !topCell.isBuilding && topCell.material === c.material;
+              const sameBottom = bottomCell && !bottomCell.isBuilding && bottomCell.material === c.material;
+
+              let width = CELL - 0.5;
+              let depth = CELL - 0.5;
+              let dx = 0;
+              let dz = 0;
+
+              if (sameLeft) { width += 0.25; dx -= 0.125; }
+              if (sameRight) { width += 0.25; dx += 0.125; }
+              if (sameTop) { depth += 0.25; dz -= 0.125; }
+              if (sameBottom) { depth += 0.25; dz += 0.125; }
+
               const matColor = MATERIALS[c.material].color;
               const tex = getMaterialTexture(c.material);
               return (
-                <mesh key={c.key} position={[c.cx, 0.1, c.cz]} receiveShadow>
-                  <boxGeometry args={[CELL-0.5, 0.2, CELL-0.5]} />
+                <mesh key={c.key} position={[c.cx + dx, 0.1, c.cz + dz]} receiveShadow>
+                  <boxGeometry args={[width, 0.2, depth]} />
                   <meshStandardMaterial color={matColor} map={tex} roughness={0.9} />
                 </mesh>
               );
@@ -650,14 +686,19 @@ function CityScene({ grid, onGridClick, showHeatMap }) {
 
 function CityView({ onBack, mapMode }) {
   const [grid, setGrid] = useState(() => generateInitialGrid(mapMode));
-  const [budget, setBudget] = useState(200000000000000); // $2M starting budget
-  const [mode, setMode] = useState("BUDGET"); // "BUDGET" or "HEAT_HUNT"
+  const [budget, setBudget] = useState(2000000); // $2M starting budget
+  const [mode, setMode] = useState(mapMode === "HEAT_HUNT" ? "HEAT_HUNT" : "BUDGET"); // "BUDGET" or "HEAT_HUNT"
   const [activeTab, setActiveTab] = useState("MATERIALS"); // "MATERIALS" or "BUILDINGS"
   const [selectedMaterial, setSelectedMaterial] = useState("White Roof");
   const [selectedBuilding, setSelectedBuilding] = useState("Small Building");
-  const [sensorLog, setSensorLog] = useState([]);
   const [showHeatMap, setShowHeatMap] = useState(false);
   const [showSpinner, setShowSpinner] = useState(false);
+  
+  // Heat Hunt State
+  const [huntState, setHuntState] = useState("playing");
+  const [huntScore, setHuntScore] = useState(0);
+  const [huntGuess, setHuntGuess] = useState(null);
+  const [huntLowest, setHuntLowest] = useState(null);
 
   // Heat Simulation Loop (runs every 1 second)
   useInterval(() => {
@@ -764,10 +805,27 @@ function CityView({ onBack, mapMode }) {
           }
         }
       } else if (mode === "HEAT_HUNT") {
-        setSensorLog(prev => [
-          { time: new Date().toLocaleTimeString(), loc: `${hitCol},${hitRow}`, temp: cell.currentTemp.toFixed(1) },
-          ...prev
-        ].slice(0, 10)); // keep last 10
+        if (huntState !== "playing") return;
+
+        // Find actual lowest temp cell right now
+        let lowest = grid[0];
+        for (let i = 1; i < grid.length; i++) {
+          if (grid[i].currentTemp < lowest.currentTemp) lowest = grid[i];
+        }
+
+        const guessedTemp = cell.currentTemp;
+        const lowestTemp = lowest.currentTemp;
+        const scoreDiff = Math.abs(guessedTemp - lowestTemp);
+        const finalScore = Math.max(0, Math.round(1000 - scoreDiff * 100));
+
+        setHuntGuess(cell);
+        setHuntLowest(lowest);
+        setHuntScore(finalScore);
+        setHuntState("game_over");
+
+        if (user) {
+          saveScore({ mode: "heat-hunt", score: finalScore, avgTemp: scoreDiff, extras: { guessedTemp, lowestTemp } }).catch(console.error);
+        }
       }
     }
   };
@@ -792,10 +850,12 @@ function CityView({ onBack, mapMode }) {
         <button className="back-btn" onClick={onBack}>← TITLE SCREEN</button>
         <h2 className="panel-title">CONTROLS</h2>
         
-        <div className="mode-toggle">
-          <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
-          <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
-        </div>
+        {mapMode !== "HEAT_HUNT" && (
+          <div className="mode-toggle">
+            <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
+            <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
+          </div>
+        )}
 
         {mode === "BUDGET" && (
           <div className="mode-content budget-mode">
@@ -869,19 +929,38 @@ function CityView({ onBack, mapMode }) {
 
         {mode === "HEAT_HUNT" && (
           <div className="mode-content heat-hunt-mode">
-            <h4>SENSOR READINGS</h4>
-            <p className="hint-text">Click anywhere in the city to drop a thermal sensor.</p>
-            <div className="sensor-log">
-              {sensorLog.length === 0 && <span className="empty-log">No readings yet.</span>}
-              {sensorLog.map((log, i) => (
-                <div key={i} className="log-entry">
-                  <span className="time">{log.time}</span>
-                  <span className="loc">[{log.loc}]</span>
-                  <span className="temp">{log.temp}°C</span>
-                </div>
-              ))}
-            </div>
-            <button className="lock-in-btn" onClick={() => alert("Simulation Locked In! Final Evaluation Pending.")}>LOCK IN DESIGN</button>
+            <h3>HEAT HUNT</h3>
+            {huntState === "playing" ? (
+              <p style={{color: '#a0b0d0', lineHeight: 1.5}}>
+                The city is a chaotic thermal mess! You have ONE guess. <strong style={{color: '#fff'}}>Click the tile that you think has the LOWEST temperature.</strong>
+              </p>
+            ) : (
+              <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(0,0,0,0.5)', borderRadius: '8px' }}>
+                <h2 style={{color: '#00ffc8', fontSize: '32px', margin: '0 0 10px 0'}}>{huntScore} <span style={{fontSize:'16px'}}>PTS</span></h2>
+                <p style={{margin: '5px 0', color: '#a0b0d0'}}>
+                  Guessed Temp: <strong style={{color: '#fff'}}>{huntGuess?.currentTemp.toFixed(1)}°C</strong>
+                </p>
+                <p style={{margin: '5px 0', color: '#a0b0d0'}}>
+                  Lowest Temp: <strong style={{color: '#00aaff'}}>{huntLowest?.currentTemp.toFixed(1)}°C</strong>
+                </p>
+                <p style={{margin: '5px 0', color: '#ff4060'}}>
+                  Difference: {Math.abs(huntGuess?.currentTemp - huntLowest?.currentTemp).toFixed(1)}°C
+                </p>
+                
+                <button 
+                  className="hud-btn" 
+                  style={{marginTop: '20px', width: '100%'}}
+                  onClick={() => {
+                    setHuntState("playing");
+                    setHuntGuess(null);
+                    setHuntLowest(null);
+                    setGrid(generateInitialGrid("HEAT_HUNT"));
+                  }}
+                >
+                  🔄 PLAY AGAIN
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -985,8 +1064,7 @@ export default function App() {
   // Not signed in → show login
   if (!user) return <LoginScreen />;
 
-  // Signed in → normal flow
-  if (screen === "CITY" || screen === "SANDBOX") return <CityView mapMode={screen} onBack={() => setScreen("title")} />;
+  if (screen === "CITY" || screen === "SANDBOX" || screen === "HEAT_HUNT") return <CityView mapMode={screen} onBack={() => setScreen("title")} />;
   return <TitleScreen onEnter={(mode) => setScreen(mode)} />;
 }
 
