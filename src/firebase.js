@@ -1,7 +1,7 @@
 // ─── Firebase Core Setup ─────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, addDoc, setDoc, doc, query, orderBy, limit, getDocs, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, setDoc, doc, query, orderBy, limit, getDocs, onSnapshot, deleteDoc } from "firebase/firestore";
 
 // ─── Firebase Config ─────────────────────────────────────────────────
 // Replace these placeholder values with YOUR config from:
@@ -109,6 +109,13 @@ export const onLeaderboardUpdate = (callback) => {
     const scores = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     callback(scores);
   });
+};
+
+/** Delete all scores from the leaderboard */
+export const clearAllScores = async () => {
+  const snapshot = await getDocs(collection(db, "scores"));
+  const deletes = snapshot.docs.map((d) => deleteDoc(doc(db, "scores", d.id)));
+  await Promise.all(deletes);
 };
 
 // ─── Exports ─────────────────────────────────────────────────────────
