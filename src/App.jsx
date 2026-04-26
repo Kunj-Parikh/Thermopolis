@@ -82,18 +82,13 @@ function TitleScreen({ onEnter, onSatellite }) {
       <TitleScene />
       <div className="title-overlay">
         <h1 className="title-logo">THERMOPOLIS</h1>
-        <p className="title-tagline">Every surface choice has a measurable temperature consequence.</p>
+        <p className="title-tagline">Every surface choice. Every degree counts.</p>
         <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginBottom: "20px" }}>
           <button className="enter-btn" onClick={() => onEnter("CITY")}>ENTER CITY</button>
           <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
           <button className="enter-btn" style={{ background: '#c06020' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
           <button className="enter-btn" onClick={onSatellite} style={{ background: "linear-gradient(90deg, #00ffc8, #0088ff)" }}>SATELLITE PIPELINE</button>
           <button className="enter-btn" style={{ background: '#00aaff' }} onClick={() => onEnter("INFO")}>SCIENCE INFO</button>
-        </div>
-        <div className="title-badges">
-          <span>React</span>
-          <span>Three.js r{THREE.REVISION}</span>
-          <span>Firebase</span>
         </div>
       </div>
       {/* Invisible secret admin button to clear leaderboard */}
