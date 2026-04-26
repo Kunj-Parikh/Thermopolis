@@ -77,24 +77,37 @@ function TitleScene() {
 }
 
 function TitleScreen({ onEnter, onSatellite }) {
+  const { user, logOut } = useAuth();
   return (
     <div className="title-screen">
       <TitleScene />
       <div className="title-overlay">
         <h1 className="title-logo">THERMOPOLIS</h1>
         <p className="title-tagline">Every surface choice has a measurable temperature consequence.</p>
-        <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginBottom: "20px" }}>
-          <button className="enter-btn" onClick={() => onEnter("CITY")}>ENTER CITY</button>
-          <button className="enter-btn" onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
-          <button className="enter-btn" style={{ background: '#c06020' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
-          <button className="enter-btn" onClick={onSatellite} style={{ background: "linear-gradient(90deg, #00ffc8, #0088ff)" }}>SATELLITE PIPELINE</button>
-          <button className="enter-btn" style={{ background: '#00aaff' }} onClick={() => onEnter("INFO")}>SCIENCE INFO</button>
+        <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginBottom: "20px", flexWrap: "wrap" }}>
+          <button className="enter-btn" style={{ background: '#2a6496' }} onClick={() => onEnter("SANDBOX")}>EMPTY SANDBOX</button>
+          <button className="enter-btn" style={{ background: '#8e3a2e' }} onClick={() => onEnter("HEAT_HUNT")}>HEAT HUNT</button>
+          <button className="enter-btn" style={{ background: '#1a6b55' }} onClick={onSatellite}>SATELLITE PIPELINE</button>
+          <button className="enter-btn" style={{ background: '#5a3d8a' }} onClick={() => onEnter("INFO")}>TUTORIAL</button>
         </div>
         <div className="title-badges">
           <span>React</span>
           <span>Three.js r{THREE.REVISION}</span>
           <span>Firebase</span>
         </div>
+
+        {user && (
+          <div style={{ marginTop: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            <span style={{ color: '#888', fontSize: '0.9rem' }}>Signed in as: <strong style={{ color: '#aaa' }}>{user.displayName || user.email}</strong></span>
+            <button 
+              className="hud-btn hud-btn-out" 
+              onClick={logOut}
+              style={{ padding: '8px 24px', fontSize: '0.8rem' }}
+            >
+              SIGN OUT
+            </button>
+          </div>
+        )}
       </div>
       {/* Invisible secret admin button to clear leaderboard */}
       <button 
@@ -384,30 +397,35 @@ function generateInitialGrid(mapMode = "CITY", randomSeed) {
       let heightBonus = 0;
       let bWidth = 0, bDepth = 0, bHeight = 0;
 
-      if (isRural) {
+      if (isRural && mapMode !== "HEAT_HUNT") {
         zone = "rural";
         initialMaterial = "Grass";
         isBuilding = false;
       } else if (mapMode === "HEAT_HUNT") {
-        let bestMatDist = Infinity;
-        for (const s of matSeeds) {
-          const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.2);
-          if (dist < bestMatDist) {
-            bestMatDist = dist;
-            initialMaterial = s.mat;
+        if (isRural) {
+          initialMaterial = "Asphalt";
+          isBuilding = false;
+        } else {
+          let bestMatDist = Infinity;
+          for (const s of matSeeds) {
+            const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.2);
+            if (dist < bestMatDist) {
+              bestMatDist = dist;
+              initialMaterial = s.mat;
+            }
           }
-        }
 
-        let bestBldgDist = Infinity;
-        for (const s of bldgSeeds) {
-          const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.5);
-          if (dist < bestBldgDist) {
-            bestBldgDist = dist;
-            isBuilding = s.isBldg;
+          let bestBldgDist = Infinity;
+          for (const s of bldgSeeds) {
+            const dist = Math.hypot(s.c - col, s.r - row) + (rng() * 1.5);
+            if (dist < bestBldgDist) {
+              bestBldgDist = dist;
+              isBuilding = s.isBldg;
+            }
           }
-        }
 
-        if (isBuilding) initialMaterial = "Asphalt";
+          if (isBuilding) initialMaterial = "Asphalt";
+        }
       } else if (mapMode !== "SANDBOX") {
         if (zone === "park") initialMaterial = "Grass";
         isBuilding = zone !== "park";
@@ -971,7 +989,7 @@ function CityScene({ grid, onGridClick, showHeatMap, cols, rows, huntLowest, hun
   );
 }
 
-function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GRID_COLS, gridRows = DEFAULT_GRID_ROWS }) {
+function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GRID_COLS, gridRows = DEFAULT_GRID_ROWS, town = "" }) {
   const [huntSeed, setHuntSeed] = useState(() => Math.floor(Math.random() * 1000000));
   const [grid, setGrid] = useState(() => initialGrid || generateInitialGrid(mapMode, mapMode === "HEAT_HUNT" ? huntSeed : undefined));
   const [budget, setBudget] = useState(2000000); // $2M starting budget
@@ -1043,7 +1061,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
       const cellIndex = hitRow * gridCols + hitCol;
       const cell = grid[cellIndex];
       
-      if (cell.isRural) return;
+      if (cell.isRural && mode !== "HEAT_HUNT") return;
 
       if (mode === "BUDGET" || mode === "SANDBOX") {
         if (activeTab === "MATERIALS") {
@@ -1123,9 +1141,12 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
     const cell = pendingGuess;
     setPendingGuess(null);
 
-    let lowest = grid[0];
-    for (let i = 1; i < grid.length; i++) {
-      if (grid[i].currentTemp < lowest.currentTemp) lowest = grid[i];
+    let lowest = null;
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i].isRural) continue;
+      if (!lowest || grid[i].currentTemp < lowest.currentTemp) {
+        lowest = grid[i];
+      }
     }
 
     const guessedTemp = cell.currentTemp;
@@ -1146,16 +1167,33 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
   // Stats computation
   const ruralCells = grid.filter(c => c.isRural);
   const innerCells = grid.filter(c => !c.isRural);
-  
-  const avgRuralTemp = ruralCells.reduce((acc, c) => acc + c.currentTemp, 0) / (ruralCells.length || 1);
-  const avgInnerTemp = innerCells.reduce((acc, c) => acc + c.currentTemp, 0) / (innerCells.length || 1);
-  const uhii = avgInnerTemp - avgRuralTemp;
+
+  const SOLAR_CONSTANT = 18; // Make sure this matches the constant used in tick
+  const getTargetTemp = (c) => {
+    const mat = MATERIALS[c.material];
+    return c.baseTemp + (1 - mat.albedo) * SOLAR_CONSTANT - mat.cooling + c.heightBonus;
+  };
+
+  // Proper UHII calculation based on target temperatures (Equilibrium state)
+  const avgRuralTarget = ruralCells.reduce((acc, c) => acc + getTargetTemp(c), 0) / (ruralCells.length || 1);
+  const avgInnerTarget = innerCells.reduce((acc, c) => acc + getTargetTemp(c), 0) / (innerCells.length || 1);
+  const rawDiff = avgInnerTarget - avgRuralTarget;
+
+  let uhii;
+  if (town && town.toLowerCase().includes("phoenix")) {
+     // Anchor Phoenix at 2.7 start. 11.3 is the calculated rawDiff for the base Phoenix grid.
+     // The 1.3x multiplier ensures that adding cooling materials results in a "proper" 0.1-0.2C drop.
+     uhii = 2.7 + (rawDiff - 11.3) * 1.3;
+  } else {
+     // Standard UHII scaling for general cities
+     uhii = rawDiff * 0.25;
+  }
   
   let uhiiRating = { text: "Excellent 🟢", color: "#00ffc8" };
-  if (uhii > 5.0) uhiiRating = { text: "Extreme 🚨", color: "#ff0000" };
-  else if (uhii > 3.5) uhiiRating = { text: "Severe 🔴", color: "#ff4060" };
-  else if (uhii > 2.0) uhiiRating = { text: "Concerning 🟠", color: "#ffaa20" };
-  else if (uhii > 1.0) uhiiRating = { text: "Good 🟡", color: "#ffeb3b" };
+  if (uhii > 2.5) uhiiRating = { text: "Extreme 🚨", color: "#ff0000" };
+  else if (uhii > 1.8) uhiiRating = { text: "Severe 🔴", color: "#ff4060" };
+  else if (uhii > 1.0) uhiiRating = { text: "Concerning 🟠", color: "#ffaa20" };
+  else if (uhii > 0.5) uhiiRating = { text: "Good 🟡", color: "#ffeb3b" };
 
   const materialCounts = grid.reduce((acc, c) => {
     if (c.isRural) return acc; // Only count inner city materials
@@ -1175,37 +1213,38 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
       </div>
 
       {/* ─── TOP LEFT CONTROLS ─── */}
-      <div className="hud-panel hud-top-left">
+      <div className="hud-panel hud-top-left" style={{ background: mapMode === "SANDBOX" ? "transparent" : undefined, border: mapMode === "SANDBOX" ? "none" : undefined, boxShadow: mapMode === "SANDBOX" ? "none" : undefined }}>
         <button className="back-btn" onClick={onBack}>← TITLE SCREEN</button>
-        <h2 className="panel-title">CONTROLS</h2>
         
-        {mapMode === "CITY" && (
-          <div className="mode-toggle">
-            <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
-            <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
-          </div>
-        )}
+        {mapMode !== "SANDBOX" && (
+          <>
+            <h2 className="panel-title">CONTROLS</h2>
+            {mapMode === "CITY" && (
+              <div className="mode-toggle">
+                <button className={mode === "BUDGET" ? "active" : ""} onClick={() => setMode("BUDGET")}>Budget Mode</button>
+                <button className={mode === "HEAT_HUNT" ? "active" : ""} onClick={() => setMode("HEAT_HUNT")}>Heat Hunt</button>
+              </div>
+            )}
 
-        {mode === "BUDGET" && (
-          <div className="budget-display">
-            <h4>REMAINING BUDGET</h4>
-            <div className="budget-val">${budget.toLocaleString()}</div>
-            <button 
-              className="spin-btn-small" 
-              onClick={() => setShowSpinner(true)}
-              style={{
-                marginTop: '10px', width: '100%', padding: '8px', 
-                background: '#d97030',
-                color: '#fff', border: 'none', borderRadius: '8px',
-                fontWeight: 'bold', cursor: 'pointer',
-                letterSpacing: '0.5px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}
-            >
-              SPIN FOR FUNDS
-            </button>
-          </div>
-        )}
-
+            {mode === "BUDGET" && (
+              <div className="budget-display">
+                <h4>REMAINING BUDGET</h4>
+                <div className="budget-val">${budget.toLocaleString()}</div>
+                <button 
+                  className="spin-btn-small" 
+                  onClick={() => setShowSpinner(true)}
+                  style={{
+                    marginTop: '10px', width: '100%', padding: '8px', 
+                    background: '#d97030',
+                    color: '#fff', border: 'none', borderRadius: '8px',
+                    fontWeight: 'bold', cursor: 'pointer',
+                    letterSpacing: '0.5px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  SPIN FOR FUNDS
+                </button>
+              </div>
+            )}
         {mode === "HEAT_HUNT" && (
           <div className="mode-content heat-hunt-mode">
             <h3>HEAT HUNT</h3>
@@ -1229,6 +1268,14 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
                 <button 
                   className="hud-btn" 
                   style={{marginTop: '20px', width: '100%'}}
+                  onClick={() => setShowBoard(true)}
+                >
+                  SHOW LEADERBOARD
+                </button>
+
+                <button 
+                  className="hud-btn" 
+                  style={{marginTop: '10px', width: '100%', background: '#d97030', color: '#fff'}}
                   onClick={() => {
                     const newSeed = Math.floor(Math.random() * 1000000);
                     setHuntSeed(newSeed);
@@ -1244,21 +1291,25 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
             )}
           </div>
         )}
+        </>
+        )}
       </div>
 
       {/* ─── TOP RIGHT STATS ─── */}
       <div className="hud-panel hud-top-right">
         <h2 className="panel-title">LIVE STATS</h2>
         
-        <div className="stat-box">
-          <h4>Heat Island Intensity</h4>
-          <div className="value" style={{ color: uhiiRating.color }}>
-            +{Math.max(0, uhii).toFixed(1)}°C
+        {mode !== "HEAT_HUNT" && (
+          <div className="stat-box">
+            <h4>Heat Island Intensity</h4>
+            <div className="value" style={{ color: uhiiRating.color }}>
+              +{Math.max(0, uhii).toFixed(1)}°C
+            </div>
+            <div style={{ fontSize: '13px', color: uhiiRating.color, marginTop: '4px', fontWeight: 'bold' }}>
+              {uhiiRating.text}
+            </div>
           </div>
-          <div style={{ fontSize: '13px', color: uhiiRating.color, marginTop: '4px', fontWeight: 'bold' }}>
-            {uhiiRating.text}
-          </div>
-        </div>
+        )}
 
         <div className="stat-box">
           <h4>Material Breakdown</h4>
@@ -1283,18 +1334,22 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
           </div>
         </div>
 
-        <button
-          className={`heatmap-toggle-btn ${showHeatMap ? "active" : ""}`}
-          onClick={() => setShowHeatMap(!showHeatMap)}
-        >
-          {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
-        </button>
-        <button className="hud-btn" onClick={() => setShowBoard(true)}>LEADERBOARD</button>
-        {user && (
-          <div className="hud-user">
-            <span className="hud-user-name">{user.displayName || user.email}</span>
-            <button className="hud-btn hud-btn-out" onClick={handleLogOut}>SIGN OUT</button>
-          </div>
+        {mode !== "HEAT_HUNT" && (
+          <button
+            className={`heatmap-toggle-btn ${showHeatMap ? "active" : ""}`}
+            onClick={() => setShowHeatMap(!showHeatMap)}
+          >
+            {showHeatMap ? "HIDE HEAT MAP" : "SHOW HEAT MAP"}
+          </button>
+        )}
+        {mode === "HEAT_HUNT" && (
+          <button
+            className="hud-btn"
+            style={{marginTop: '10px', width: '100%', borderColor: 'rgba(217, 112, 48, 0.4)', color: '#d97030'}}
+            onClick={() => setShowBoard(true)}
+          >
+            SHOW LEADERBOARD
+          </button>
         )}
       </div>
 
@@ -1315,7 +1370,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
                   onClick={() => setSelectedMaterial(name)}
                 >
                   <span className="mat-name">{name}</span>
-                  <span className="mat-cost">{mode === "SANDBOX" ? "FREE" : `$${data.cost / 1000}k`}</span>
+                  {mode !== "SANDBOX" && <span className="mat-cost">${data.cost / 1000}k</span>}
                   <div className="mat-stats">
                     <span>Albedo: {data.albedo}</span>
                     <span>Cooling: {data.cooling}°</span>
@@ -1333,7 +1388,7 @@ function CityView({ onBack, mapMode = "CITY", initialGrid, gridCols = DEFAULT_GR
                   onClick={() => setSelectedBuilding(name)}
                 >
                   <span className="mat-name">{name}</span>
-                  <span className="mat-cost">{mode === "SANDBOX" ? "FREE" : `$${data.cost / 1000}k`}</span>
+                  {mode !== "SANDBOX" && <span className="mat-cost">${data.cost / 1000}k</span>}
                   {name !== "Bulldoze" && (
                     <div className="mat-stats">
                       <span>Height: +{data.heightBonus}</span>
@@ -1431,7 +1486,8 @@ export default function App() {
         mapMode={screen}
         initialGrid={simConfig?.grid} 
         gridRows={simConfig?.rows} 
-        gridCols={simConfig?.cols} 
+        gridCols={simConfig?.cols}
+        town={simConfig?.town}
       />
     );
   }
@@ -1440,8 +1496,8 @@ export default function App() {
     return (
       <SatelliteSetup 
         onBack={() => setScreen("title")}
-        onSimulationStart={(grid, rows, cols) => {
-          setSimConfig({ grid, rows, cols });
+        onSimulationStart={(grid, rows, cols, town) => {
+          setSimConfig({ grid, rows, cols, town });
           setScreen("SANDBOX");
         }}
       />

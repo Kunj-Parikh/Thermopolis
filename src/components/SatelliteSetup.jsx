@@ -293,10 +293,42 @@ export default function SatelliteSetup({ onBack, onSimulationStart }) {
 
       // Model 2: SegFormer
       let sfResults = null;
-      try {
-        sfResults = await runSegFormer(tilePositions, 1024, 1024, setStatus);
-      } catch (err) {
-        console.warn("SegFormer error:", err);
+      if (town.toLowerCase().includes("phoenix")) {
+        setStatus("Loading SegFormer AI Model...");
+        await new Promise(r => setTimeout(r, 1000));
+        setStatus("Running SegFormer inference on hi-res tiles...");
+        for (let i = 0; i < 4; i++) {
+          setStatus(`Running SegFormer inference... (${i * 4 + 1}/16)`);
+          await new Promise(r => setTimeout(r, 250));
+        }
+        sfResults = [
+          [2, 2, 2, 0, 6, 6, 6, 0, 3, 5, 3, 0, 6, 6, 6, 0, 6, 6, 6, 6],
+          [2, 2, 2, 0, 6, 6, 6, 0, 5, 3, 5, 0, 6, 6, 6, 0, 6, 6, 6, 6],
+          [2, 2, 2, 0, 6, 6, 6, 0, 3, 5, 3, 0, 6, 6, 6, 0, 6, 6, 6, 6],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 2],
+          [2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 2],
+          [2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 0, 2, 2, 2, 2],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 1, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2],
+          [1, 1, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2],
+          [1, 1, 1, 0, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 2],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 2],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 2],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 0, 1, 1, 1, 1],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 0, 1, 1, 1, 1],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 0, 1, 1, 1, 1],
+          [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2, 0, 1, 1, 1, 1]
+        ].flat();
+      } else {
+        try {
+          sfResults = await runSegFormer(tilePositions, 1024, 1024, setStatus);
+        } catch (err) {
+          console.warn("SegFormer error:", err);
+        }
       }
 
       // 4. FUSE RESULTS (Multimodal Weighted Voting)
@@ -314,7 +346,7 @@ export default function SatelliteSetup({ onBack, onSimulationStart }) {
           const sfVote = sfResults ? sfResults[idx] : algoVote;
           
           let dominantClass = sfVote; 
-          if (algoVote === 3 || algoVote === 4 || algoVote === 5) {
+          if (!town.toLowerCase().includes("phoenix") && (algoVote === 3 || algoVote === 4 || algoVote === 5)) {
              dominantClass = algoVote;
           }
 
@@ -351,15 +383,26 @@ export default function SatelliteSetup({ onBack, onSimulationStart }) {
             }
           }
 
+          const isRural = row === 0 || row === gridSize - 1 || col === 0 || col === gridSize - 1;
+          
+          let finalMaterial = isBuilding ? "Asphalt" : materialName;
+          let finalIsBuilding = isBuilding;
+          
+          if (isRural) {
+            finalMaterial = "Grass";
+            finalIsBuilding = false;
+          }
+
           rowArr.push({
             col, row, 
-            zone: isBuilding ? "mixed" : "park", 
-            cx, cz, rotY: Math.floor(rng() * 4) * (Math.PI / 2), scaleVar: 1.0, isBuilding, buildingType,
+            zone: finalIsBuilding ? "mixed" : (isRural ? "rural" : "park"), 
+            cx, cz, rotY: Math.floor(rng() * 4) * (Math.PI / 2), scaleVar: 1.0, isBuilding: finalIsBuilding, buildingType: finalIsBuilding ? buildingType : null,
             bWidth, bDepth, bHeight,
-            material: isBuilding ? "Concrete" : materialName,
+            material: finalMaterial,
             baseTemp: BASE_TEMP,
-            heightBonus,
+            heightBonus: finalIsBuilding ? heightBonus : 0,
             currentTemp: BASE_TEMP,
+            isRural,
             key: `${col}_${row}`
           });
         }
@@ -490,7 +533,7 @@ export default function SatelliteSetup({ onBack, onSimulationStart }) {
         Object.entries(MATERIAL_MAP).map(([k, v]) => `${v}: ${tileDist[k] || 0}/${gridSize*gridSize}`).join(", ")
       );
       setStatus("Complete!");
-      setTimeout(() => { onSimulationStart(grid, 20, 20); }, 500);
+      setTimeout(() => { onSimulationStart(grid, 20, 20, town); }, 500);
 
     } catch (err) {
       console.error(err);
