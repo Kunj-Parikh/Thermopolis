@@ -1,8 +1,7 @@
 .satellite-setup {
   position: absolute;
   inset: 0;
-  background-color: #06060e;
-  background-image: radial-gradient(circle at center, #111122 0%, #06060e 100%);
+  background: #06060e;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -81,8 +80,8 @@
 }
 
 .start-btn {
-  background: linear-gradient(90deg, #00ffc8, #0088ff);
-  color: #000;
+  background: #1a6b55;
+  color: #fff;
   border: none;
   padding: 15px;
   font-size: 16px;
@@ -96,7 +95,8 @@
 
 .start-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(0, 255, 200, 0.3);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+  background: #1f7d63;
 }
 
 .start-btn:disabled {
@@ -133,16 +133,21 @@
 }
 
 .back-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #000000;
+  border: 1px solid #333333;
+  color: #aaaaaa;
   padding: 10px 20px;
   border-radius: 4px;
   margin-top: 30px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  font-weight: bold;
+  box-shadow: none;
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: #111111;
+  color: #ffffff;
+  border-color: #555555;
+  box-shadow: none;
 }
